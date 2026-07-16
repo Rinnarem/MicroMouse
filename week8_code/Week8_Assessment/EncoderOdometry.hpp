@@ -11,7 +11,8 @@
  *   R = 0.016f  (wheel radius 16mm)
  *   B = 0.092f  (axle length 92mm)
  *
- * 
+ * NOTE: odometry.update() must be called each control loop iteration.
+ *       It is not called automatically.
  */
 
 namespace mtrn3100 {
@@ -27,12 +28,14 @@ public:
         float dR = rightRads - lastRPos;   // change in right wheel angle
 
         // Differential drive forward kinematics
-        float ds     = R * (dR + dL) / 2.0f;        // linear displacement (m)
-        float dtheta = R * (dR - dL) / B;            // heading change (rad)
+        float ds     = R * (dR + dL) / 2.0f;   // linear displacement (m)
+        float dtheta = R * (dR - dL) / B;       // heading change (rad)
 
-        // Integrate pose
-        x += ds * cos(h);
-        y += ds * sin(h);
+        // Midpoint Euler integration: use heading at the midpoint of the arc
+        // for better accuracy on curved paths than using the old heading alone.
+        float hMid = h + dtheta / 2.0f;
+        x += ds * cos(hMid);
+        y += ds * sin(hMid);
         h += dtheta;
 
         lastLPos = leftRads;

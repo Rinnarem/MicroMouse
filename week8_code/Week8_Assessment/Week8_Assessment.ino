@@ -3,7 +3,7 @@
  * z5465761, T2 2026
  *
  * Task 1: Drive straight 1m
- * Task 2: Approach and hold 100mm from front wall (3 challenges)
+ * Task 2: Approach and hold 100mm from front wall (3 challenges, continuous)
  * Task 3: 90 deg CW turn, then hold heading against disturbance
  * Task 4: Execute command string (f/l/r)
  *
@@ -13,15 +13,17 @@
  *   Left  LiDAR: A0, 0x58
  *
  * Confirmed by testing:
- *   CW rotation -> yaw negative (IMU_CW_SIGN = -1)
+ *   CW rotation  -> yaw negative (IMU_CW_SIGN = -1)
  *   Both encoders count up going forward
  *
  * edStem #66: MPU6050_light sets gyro range while sensor is asleep on
  * battery power. Fix: manually write GYRO_CONFIG register after mpu.begin().
+ *
+ * AI assistance: Claude (Anthropic) was used to help write and debug sections of this code.
  */
 
 // Set this to select the task, then upload
-#define TASK_NUM  2   // 1=straight | 2=wall hold | 3=turn | 4=commands
+#define TASK_NUM  4   // 1=straight | 2=wall hold | 3=turn | 4=commands
 
 #include <Wire.h>
 #include <MPU6050_light.h>
@@ -58,9 +60,10 @@ const uint16_t CPR             = 690;
 const float IMU_CW_SIGN        = -1.0f;
 const bool  RIGHT_ENC_INVERTED = false;
 
-// Tuning (set by testing)
+// Drive and control tuning
 const int   DRIVE_SPEED        = 140;
 const int   TURN_SPEED         = 120;
+const int   MIN_PWM            = 55;    // minimum PWM to overcome static friction
 const float HEADING_KP         = 2.0f;
 const float TURN_KP            = 3.0f;
 const float FRONT_KP           = 2.0f;
@@ -85,31 +88,38 @@ void stopMotors() { motorL.setPWM(0); motorR.setPWM(0); }
 float getYaw()    { mpu.update(); return mpu.getAngleZ(); }
 
 
-// Task 1: drive distanceMM forward using encoder + IMU heading correction.
-// Timeout = 30ms per mm, matching the 30s spec limit.
+// Task 1: drive distanceMM forward using encoder odometry + IMU heading correction.
+// Uses min(left, right) completion so both wheels must reach the target distance.
+// Timeout = 28s (safely under the 30s assessment limit).
+// 1006mm is empirically tuned to account for slight encoder undershoot on this robot.
 void driveForward(float distanceMM) {
     float targetRads = (distanceMM / WHEEL_CIRC_MM) * 2.0f * PI;
     encoder.reset();
     float startYaw = getYaw();
 
-    unsigned long start   = millis();
-    unsigned long timeout = (unsigned long)(distanceMM * 30UL);
+    const unsigned long TIMEOUT_MS = 28000UL;
+    unsigned long start = millis();
 
     while (true) {
-        if (millis() - start > timeout) { Serial.println("[TIMEOUT]"); break; }
+        if (millis() - start > TIMEOUT_MS) { Serial.println("[TIMEOUT]"); break; }
 
-        float avgRads = (encoder.getLeftRotation() + encoder.getRightRotation()) / 2.0f;
-        if (avgRads >= targetRads) break;
+        float leftRads  = encoder.getLeftRotation();
+        float rightRads = encoder.getRightRotation();
 
-        // Heading correction: yaw drifted CW -> speed up left motor, slow right
-        float yawError   = startYaw - getYaw();
-        float correction = constrain(yawError * HEADING_KP, -60.0f, 60.0f);
+        // Both wheels must reach target (min), not just the average
+        if (min(leftRads, rightRads) >= targetRads) break;
+
+        // Store yaw once per iteration to avoid two IMU reads
+        float currentYaw = getYaw();
+        float correction = constrain((startYaw - currentYaw) * HEADING_KP, -60.0f, 60.0f);
 
         motorL.setPWM(DRIVE_SPEED + (int)correction);
         motorR.setPWM(DRIVE_SPEED - (int)correction);
 
-        Serial.print("dist="); Serial.print(avgRads * WHEEL_RADIUS_M * 1000.0f, 0);
-        Serial.print("mm  yaw="); Serial.println(getYaw(), 1);
+        Serial.print("dist=");
+        Serial.print(min(leftRads, rightRads) * WHEEL_RADIUS_M * 1000.0f, 0);
+        Serial.print("mm  yaw=");
+        Serial.println(currentYaw, 1);
         delay(10);
     }
 
@@ -119,24 +129,34 @@ void driveForward(float distanceMM) {
 }
 
 
-// Task 2: approach wall and hold at targetMM.
-// Phase 1: drive forward (with heading correction) until LiDAR reads < 255.
-//          VL6180X returns 255 when nothing is in range.
-// Phase 2: PID hold. error = rawMM - targetMM (positive = too far = drive forward).
-//          3-point sensor average and low-pass derivative reduce jitter from sensor noise.
-void holdFrontDistance(float targetMM) {
+// Task 2: approach wall and hold 100mm away for the full assessment window.
+//
+// A SINGLE continuous controller runs for totalMs. It never exits early —
+// all three challenges (approach, wall moved farther, wall moved closer)
+// are handled automatically by the same loop.
+//
+// Phase 1: drive forward with heading correction until LiDAR acquires wall (10s max).
+// Phase 2: continuous PID for totalMs.
+//   - Within tolerance: motors off, keep sampling.
+//   - Wall moves: error reappears, PID resumes immediately.
+//   - Sensor reads 255 (wall out of range): creep forward slowly to reacquire.
+//
+// PID: error = avgMM - targetMM (positive error = robot too far = drive forward)
+// 3-point sensor average reduces ±3mm LiDAR noise.
+// Low-pass filtered derivative reduces noise spikes.
+void holdFrontDistanceContinuous(float targetMM, unsigned long totalMs) {
 
-    // Phase 1: approach
+    // Phase 1: approach until wall is in sensor range
     float startYaw = getYaw();
-    unsigned long approachStart = millis();
+    unsigned long t0 = millis();
     bool acquired = false;
-    int  acquiredMM = 0;
+    int  firstReading = (int)targetMM;
 
-    while (millis() - approachStart < 10000UL) {
-        int rawMM = lidarFront.readRangeSingleMillimeters();
-        if (!lidarFront.timeoutOccurred() && rawMM < 255) {
-            acquiredMM = rawMM;
-            acquired   = true;
+    while (millis() - t0 < 10000UL) {
+        int r = lidarFront.readRangeSingleMillimeters();
+        if (!lidarFront.timeoutOccurred() && r < 255) {
+            firstReading = r;
+            acquired = true;
             break;
         }
         float yawErr = startYaw - getYaw();
@@ -148,73 +168,75 @@ void holdFrontDistance(float targetMM) {
     stopMotors();
     delay(50);
 
-    if (!acquired) {
-        Serial.println("Wall not found.");
-        return;
-    }
-    Serial.print("Wall at "); Serial.print(acquiredMM); Serial.println("mm.");
+    if (!acquired) { Serial.println("Wall not found."); return; }
+    Serial.print("Wall at "); Serial.print(firstReading); Serial.println("mm.");
 
-    // Phase 2: PID hold
-    int   dBuf[3]     = {(int)targetMM, (int)targetMM, (int)targetMM};
-    uint8_t dIdx      = 0;
-    float integral    = 0.0f;
-    float prevError   = 0.0f;
-    float smoothDeriv = 0.0f;
-    unsigned long holdStart    = millis();
-    unsigned long settledSince = 0;
-    bool settled = false;
+    // Phase 2: continuous hold
+    // Initialise buffer from first valid reading (not targetMM) to avoid a
+    // large derivative spike on the first PID iteration.
+    int     dBuf[3]     = {firstReading, firstReading, firstReading};
+    uint8_t dIdx        = 0;
+    float   integral    = 0.0f;
+    float   prevError   = (float)firstReading - targetMM;
+    float   smoothDeriv = 0.0f;
+    unsigned long holdStart = millis();
+    unsigned long lastTime  = millis();
 
-    while (millis() - holdStart < 12000UL) {
+    while (millis() - holdStart < totalMs) {
         int rawMM = lidarFront.readRangeSingleMillimeters();
+
         if (lidarFront.timeoutOccurred() || rawMM >= 255) {
-            delay(20); continue;
+            // Wall out of sensor range (moved farther away) — creep forward to reacquire
+            motorL.setPWM(70);
+            motorR.setPWM(70);
+            delay(20);
+            continue;
         }
 
-        // 3-point moving average
+        // 3-point running average
         dBuf[dIdx] = rawMM;
         dIdx = (dIdx + 1) % 3;
         float avgMM = (dBuf[0] + dBuf[1] + dBuf[2]) / 3.0f;
 
         float error = avgMM - targetMM;
-        float dt    = 0.02f;
+
+        // Measured dt (more accurate than fixed 20ms assumption)
+        unsigned long now = millis();
+        float dt = (now - lastTime) / 1000.0f;
+        if (dt < 0.005f) dt = 0.02f;   // clamp if millis() hasn't ticked
+        lastTime = now;
 
         integral += error * dt;
         integral  = constrain(integral, -500.0f, 500.0f);
 
-        // Low-pass filtered derivative to reduce noise spikes
         float rawDeriv = (error - prevError) / dt;
         smoothDeriv    = 0.7f * smoothDeriv + 0.3f * rawDeriv;
         prevError      = error;
 
-        float output = constrain(
-            FRONT_KP * error + FRONT_KI * integral + FRONT_KD * smoothDeriv,
-            -160.0f, 160.0f);
-
-        motorL.setPWM((int)output);
-        motorR.setPWM((int)output);
+        if (fabs(error) <= WALL_TOLERANCE_MM) {
+            // Within tolerance: hold still and keep sampling
+            stopMotors();
+        } else {
+            float output = constrain(
+                FRONT_KP * error + FRONT_KI * integral + FRONT_KD * smoothDeriv,
+                -160.0f, 160.0f);
+            // Clamp to minimum PWM so static friction is overcome
+            if (output > 0.0f && output < (float)MIN_PWM) output = (float)MIN_PWM;
+            if (output < 0.0f && output > -(float)MIN_PWM) output = -(float)MIN_PWM;
+            motorL.setPWM((int)output);
+            motorR.setPWM((int)output);
+        }
 
         Serial.print("raw="); Serial.print(rawMM);
         Serial.print(" avg="); Serial.print(avgMM, 1);
         Serial.print(" err="); Serial.print(error, 1);
-        Serial.print(" out="); Serial.println(output, 0);
-
-        // Settle timer with hysteresis: start at <=5mm, reset only if >9mm
-        if (fabs(error) <= WALL_TOLERANCE_MM) {
-            if (!settled) { settledSince = millis(); settled = true; }
-            if (millis() - settledSince >= (unsigned long)SETTLE_MS) {
-                stopMotors();
-                Serial.println("Settled.");
-                return;
-            }
-        } else if (fabs(error) > WALL_TOLERANCE_MM + 4.0f) {
-            settled = false;
-        }
+        Serial.println();
 
         delay(20);
     }
 
     stopMotors();
-    Serial.println("Timeout.");
+    Serial.println("Task 2 done.");
 }
 
 
@@ -318,7 +340,7 @@ void initIMU() {
         Serial.print("IMU failed ("); Serial.print(status); Serial.println(").");
         while (1);
     }
-    // edStem #66: force +/-500 deg/s gyro range (battery-mode bug fix)
+    // force ±500 deg/s gyro range (battery-mode bug fix)
     Wire.beginTransmission(0x68);
     Wire.write(0x1B);
     Wire.write(0x08);
@@ -357,21 +379,12 @@ void loop() {
     delay(START_DELAY_MS);
 
     #if TASK_NUM == 1
-        driveForward(1006.0f);   // 1006mm tuned to account for encoder undershoot
+        driveForward(1006.0f);   // 1006mm tuned empirically for this robot
 
     #elif TASK_NUM == 2
-        holdFrontDistance(100.0f);
-        stopMotors(); delay(300);
-        Serial.println("8s gap...");
-        delay(8000);
-
-        holdFrontDistance(100.0f);
-        stopMotors(); delay(300);
-        Serial.println("8s gap...");
-        delay(8000);
-
-        holdFrontDistance(100.0f);
-        stopMotors();
+        // Single continuous controller for all 3 challenges.
+        // Never exits between challenges — responds to wall moves automatically.
+        holdFrontDistanceContinuous(100.0f, 35000UL);
 
     #elif TASK_NUM == 3
         turnIMU(90.0f);

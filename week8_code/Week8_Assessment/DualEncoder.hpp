@@ -12,8 +12,6 @@
  *   Both encoders count UP when the robot drives FORWARD.
  *   If the right encoder counts DOWN when going forward, set RIGHT_INVERTED = true.
  *   Verify with Calibration.ino: drive forward, both counts should increase.
- *
- *
  */
 
 namespace mtrn3100 {
@@ -35,9 +33,21 @@ public:
         attachInterrupt(digitalPinToInterrupt(mot2_int), readRightISR, RISING);
     }
 
-    // Convert counts to radians of wheel rotation
-    float getLeftRotation()  const { return (float)l_count / (float)counts_per_revolution * 2.0f * PI; }
-    float getRightRotation() const { return (float)r_count / (float)counts_per_revolution * 2.0f * PI; }
+    // Convert counts to radians of wheel rotation.
+    // noInterrupts() guard prevents a corrupted read of the 4-byte long on 8-bit AVR
+    // (the ISR can fire mid-read and change the value between byte accesses).
+    float getLeftRotation() const {
+        noInterrupts();
+        long val = l_count;
+        interrupts();
+        return (float)val / (float)counts_per_revolution * 2.0f * PI;
+    }
+    float getRightRotation() const {
+        noInterrupts();
+        long val = r_count;
+        interrupts();
+        return (float)val / (float)counts_per_revolution * 2.0f * PI;
+    }
 
     // Reset both counters to zero (call before each new movement)
     void reset() {
