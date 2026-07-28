@@ -74,6 +74,12 @@ const float WALL_TOLERANCE_MM  = 5.0f;
 const int   START_DELAY_MS     = 3000;
 const int   SETTLE_MS          = 400;
 
+// Extra Lidar parameters to prevent collisions while driving, used in function driveForward()
+const int SIDE_DIST = 51; //mm
+const int SIDE_DETECT = 50; //mm
+const int FRONT_DIST = 100; //mm
+const float WALL_FOLLOW_KP = 0.8;
+
 mtrn3100::Motor           motorL(MOT1_PWM, MOT1_DIR);
 mtrn3100::Motor           motorR(MOT2_PWM, MOT2_DIR);
 mtrn3100::DualEncoder     encoder(ENC1_A, ENC1_B, ENC2_A, ENC2_B, RIGHT_ENC_INVERTED);
@@ -85,7 +91,10 @@ VL6180X lidarRight;
 VL6180X lidarLeft;
 
 void stopMotors() { motorL.setPWM(0); motorR.setPWM(0); }
-float getYaw()    { mpu.update(); return mpu.getAngleZ(); }
+float getYaw()    { 
+    mpu.update(); 
+    return mpu.getAngleZ(); 
+    }
 
 
 // Task 1: drive distanceMM forward using encoder odometry + IMU heading correction.
@@ -99,7 +108,7 @@ void driveForward(float distanceMM) {
 
     const unsigned long TIMEOUT_MS = 28000UL;
     unsigned long start = millis();
-
+    
     while (true) {
         if (millis() - start > TIMEOUT_MS) { Serial.println("[TIMEOUT]"); break; }
 
@@ -111,8 +120,45 @@ void driveForward(float distanceMM) {
 
         // Store yaw once per iteration to avoid two IMU reads
         float currentYaw = getYaw();
-        float correction = constrain((startYaw - currentYaw) * HEADING_KP, -60.0f, 60.0f);
+        float headingCorrection = constrain((startYaw - currentYaw) * HEADING_KP, -60.0f, 60.0f);
+        float wallCorrection = 0;
+        // // Lidar checks, simply checks distance ahead
+        // int front = lidarFront.readRangeSingleMillimeters();
+        // int left  = lidarLeft.readRangeSingleMillimeters();
+        // int right = lidarRight.readRangeSingleMillimeters();
 
+        // bool frontValid = !lidarFront.timeoutOccurred();
+        // bool leftValid  = !lidarLeft.timeoutOccurred()  && left  < 255;
+        // bool rightValid = !lidarRight.timeoutOccurred() && right < 255;
+        // static float leftFiltered = left;
+        // static float rightFiltered = right;
+        // leftFiltered = 0.8 * leftFiltered + 0.2 * left;
+        // rightFiltered = 0.8 * rightFiltered + 0.2 * right;
+        // Serial.print("Lidar info; Front Range: ");
+        // Serial.print(front);
+        // Serial.print(" Validity is: ");
+        // Serial.println(frontValid);
+        // if (frontValid && front < FRONT_DIST) {
+        //     Serial.println("Front wall detected.");
+        //     break;
+        // }
+        // if (leftValid && leftFiltered < SIDE_DETECT) { wallCorrection = wallCorrection + (SIDE_DIST - leftFiltered) * WALL_FOLLOW_KP; }
+        // else if (rightValid && rightFiltered < SIDE_DETECT) { wallCorrection = wallCorrection - (SIDE_DIST - rightFiltered) * WALL_FOLLOW_KP; }
+        float correction = constrain(headingCorrection + wallCorrection, -60.0f, 60.0f);
+        // Serial.println("::::::::::::::::::::::::::::");
+        // Serial.print("Lidar info; Left Range: ");
+        // Serial.println(left);
+        // Serial.print("Lidar info; Right Range: ");
+        // Serial.println(right);
+        // Serial.print("Left Valid: ");
+        // Serial.println(leftValid);
+        // Serial.print("Right Valid: ");
+        // Serial.println(rightValid);
+        // Serial.print(" Wall correction needed: ");
+        // Serial.println(wallCorrection);
+        // Serial.print(" Heading correction needed: ");
+        // Serial.println(headingCorrection);
+        // Serial.println("::::::::::::::::::::::::::::");
         motorL.setPWM(DRIVE_SPEED + (int)correction);
         motorR.setPWM(DRIVE_SPEED - (int)correction);
 
@@ -242,6 +288,7 @@ void holdFrontDistanceContinuous(float targetMM, unsigned long totalMs) {
 
 // Task 3: turn degrees CW (positive) or CCW (negative) using IMU.
 void turnIMU(float degrees) {
+    Serial.println(mpu.getAngleZ(), 1); Serial.print("\t| \n");
     float targetYaw = getYaw() + IMU_CW_SIGN * degrees;
     Serial.print("Turning to "); Serial.println(targetYaw, 1);
 
@@ -305,6 +352,8 @@ void executeCommands(const char* commands) {
     }
     Serial.println("Done.");
 }
+
+
 
 
 void initLidars() {
@@ -393,7 +442,8 @@ void loop() {
         holdHeading(setpoint, 25000);
 
     #elif TASK_NUM == 4
-        executeCommands("lfrfflfr");   // <- change on the day
+        // lfrfflfr
+        executeCommands("lfrffrflf");   // <- change on the day
 
     #endif
 

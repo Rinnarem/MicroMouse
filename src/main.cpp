@@ -1,11 +1,13 @@
-#define motorA 5 //Input 3
-#define motorB 6 //Input 4
-#define motorC 8 //Input 1
-#define motorD 9 //Input 2
+#include <PID.hpp>
+
+constexpr int motorA 5 //Input 3
+constexpr int motorB 6 //Input 4
+constexpr int motorC 8 //Input 1
+constexpr int motorD 9 //Input 2
 // Odd inputs control PWM
 // Even inputs control direction
-#define encoderPin1 2
-#define encoderPin2 3
+constexpr int encoderPin1 2
+constexpr int encoderPin2 3
 
 volatile long encoderCount = 0;
 volatile int lastEncoded = 0;
