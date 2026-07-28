@@ -11,8 +11,12 @@
 
 #define ENC1_A  2    // Left encoder interrupt pin  — confirmed
 #define ENC1_B  4    // Left encoder direction pin  — confirmed
+// #define ENC2_A  3    // Right encoder interrupt pin — VERIFY
+// #define ENC2_B  5    // Right encoder direction pin — VERIFY
+
 #define ENC2_A  3    // Right encoder interrupt pin — VERIFY
-#define ENC2_B  5    // Right encoder direction pin — VERIFY
+#define ENC2_B  5  // Right encoder direction pin — VERIFY
+
 
 #define MOT1_PWM  9   // Left motor PWM   — confirmed
 #define MOT1_DIR  10  // Left motor DIR   — confirmed

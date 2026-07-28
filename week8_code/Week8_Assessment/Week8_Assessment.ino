@@ -23,7 +23,7 @@
  */
 
 // Set this to select the task, then upload
-#define TASK_NUM  4   // 1=straight | 2=wall hold | 3=turn | 4=commands
+#define TASK_NUM  3   // 1=straight | 2=wall hold | 3=turn | 4=commands
 
 #include <Wire.h>
 #include <MPU6050_light.h>
@@ -118,7 +118,12 @@ void driveForward(float distanceMM) {
 
         Serial.print("dist=");
         Serial.print(min(leftRads, rightRads) * WHEEL_RADIUS_M * 1000.0f, 0);
-        Serial.print("mm  yaw=");
+        Serial.print("mm ");
+        Serial.print(" L = ");
+        Serial.print(leftRads);
+        Serial.print(" R = ");
+        Serial.print(rightRads);
+        Serial.print("yaw= ");
         Serial.println(currentYaw, 1);
         delay(10);
     }
@@ -393,7 +398,7 @@ void loop() {
         holdHeading(setpoint, 25000);
 
     #elif TASK_NUM == 4
-        executeCommands("lfrfflfr");   // <- change on the day
+        executeCommands("flfrfllf");   // <- change on the day
 
     #endif
 
