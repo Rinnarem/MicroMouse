@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdio.h>
 
 class Maze {
 
@@ -117,6 +118,38 @@ class Maze {
     // not including null terminator
     uint8_t getPathCommands(uint8_t startRow, uint8_t startCol, Direction startDir) {
         //TODO
+    }
+
+    void print() const {
+        for (uint8_t r = 0; r < SIZE; r++) {
+
+            // Top wall row for this row of cells)
+            for (uint8_t c = 0; c < SIZE; c++) {
+                printf("+");
+                printf(hasWall(r, c, NORTH) ? "---" : "   ");
+            }
+            printf("+\n");
+
+            // Cell content row: west wall, distance, east wall,
+            for (uint8_t c = 0; c < SIZE; c++) {
+                printf(hasWall(r, c, WEST) ? "|" : " ");
+
+                 // unreached cell shown as a dot
+                if (distance[r][c] == MAX_DIST) {
+                    printf(" . ");  
+                } else {
+                    printf("%2d ", distance[r][c]);
+                }
+            }
+            printf(hasWall(r, SIZE - 1, EAST) ? "|\n" : " \n");
+        }
+
+        // Bottom border 
+        for (uint8_t c = 0; c < SIZE; c++) {
+            printf("+");
+            printf(hasWall(SIZE - 1, c, SOUTH) ? "---" : "   ");
+        }
+        printf("+\n");
     }
 
     private: 
