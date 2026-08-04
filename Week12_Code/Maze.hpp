@@ -8,7 +8,7 @@ class Maze {
     public: 
 
     static const uint8_t SIZE = 9;
-    static const uint8_t MAX_DIST = 9;
+    static const uint8_t MAX_DIST = 255;
     enum Direction : uint8_t { NORTH = 0, EAST = 1, SOUTH = 2, WEST = 3};
 
     // Constructor for maze class
@@ -46,8 +46,8 @@ class Maze {
         }
 
         // Find neighbouring cell if it exists
-        int8_t nRow;
-        int8_t nCol;
+        int8_t nRow = row;
+        int8_t nCol = col;
         Direction opposite;
 
         switch(dir) {
