@@ -17,7 +17,15 @@ public:
 
     // 4.1 - given a string of commands, executes the path and returns true if successful
     bool executePath (const char* path) {
-        //TODO
+        for (int i = 0; commands[i] != '\0'; i++) {
+        switch (commands[i]) {
+            case 'f': motion.forwardOneCell(); break;
+            case 'r': motion.turnRight90();       break;
+            case 'l': motion.turnLeft90();        break;
+            default:  Serial.print("Unknown: "); Serial.println(commands[i]);
+        }
+        delay(200);
+    }
         return true;
     }
 
