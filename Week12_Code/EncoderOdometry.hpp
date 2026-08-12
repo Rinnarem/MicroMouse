@@ -42,7 +42,13 @@ public:
         lastRPos = rightRads;
     }
 
-    void reset() { x = 0; y = 0; h = 0; lastLPos = 0; lastRPos = 0; }
+    void reset(float newX = 0, float newY = 0, float newH = 0) { 
+        x = newX; 
+        y = newY; 
+        h = newH; 
+        lastLPos = 0; 
+        lastRPos = 0; 
+    }
 
     float getX() const { return x; }   // metres
     float getY() const { return y; }   // metres
