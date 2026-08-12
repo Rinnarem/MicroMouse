@@ -17,15 +17,19 @@ public:
 
     // 4.1 - given a string of commands, executes the path and returns true if successful
     bool executePath (const char* path) {
-        for (int i = 0; commands[i] != '\0'; i++) {
-        switch (commands[i]) {
-            case 'f': motion.forwardOneCell(); break;
-            case 'r': motion.turnRight90();       break;
-            case 'l': motion.turnLeft90();        break;
-            default:  Serial.print("Unknown: "); Serial.println(commands[i]);
+        for (int i = 0; path[i] != '\0'; i++) {
+            bool success = executeCommand(path[i]);
+
+            if (!success) {
+                Serial.print("Move failed at command "); 
+                Serial.print(i);
+                Serial.print(" ('");
+                Serial.print(path[i]);
+                Serial.println("')");
+                return false;
+            }
+            delay(200);
         }
-        delay(200);
-    }
         return true;
     }
 
@@ -38,6 +42,27 @@ public:
 
 
 private:
+
+    bool executeCommand(char cmd) {
+        bool success = true;
+
+        switch (cmd) {
+            case 'f' :
+                success = motion.forwardOneCell();
+                break;
+            
+            case 'l':
+                success = motion.turnLeft90();
+                break;
+
+            case 'r':
+                success = motion.turnRight90();
+                break;
+            default:
+                Serial.print("Unknown command");
+                return false;
+        }
+    }
 
     Maze& maze;
     MotionController& motion;
