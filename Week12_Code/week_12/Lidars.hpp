@@ -102,13 +102,15 @@ public:
     float getRightMM() const { return rightMM; }
 
     bool hasWallFront() const {return frontMM < wallThreshold; }
-    bool hasWallLeft() const {return frontMM < wallThreshold; }
-    bool hasWallRight() const {return frontMM < wallThreshold; }
+    bool hasWallLeft() const {return leftMM < wallThreshold; }
+    bool hasWallRight() const {return rightMM < wallThreshold; }
 
     // Returns true if a lidar has timed out
     bool hasError() const {
         return (frontTimedOut || rightTimedOut || leftTimedOut);
     }
+
+    static constexpr int BUFFER_SIZE = 3;
 
 private:
 
@@ -116,8 +118,6 @@ private:
         return (buffer[0] + buffer[1] + buffer[2]) / 3;
     }
     
-    static constexpr int BUFFER_SIZE = 3;
-
     VL6180X lidarFront;
     VL6180X lidarRight;
     VL6180X lidarLeft;
