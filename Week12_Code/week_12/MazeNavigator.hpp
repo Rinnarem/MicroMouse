@@ -62,6 +62,7 @@ private:
                 Serial.print("Unknown command");
                 return false;
         }
+        return success;
     }
 
     Maze& maze;

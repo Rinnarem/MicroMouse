@@ -59,13 +59,15 @@ public:
             float rightRads = encoder.getRightRotation();
             float driveSpeed = distancePid.compute(min(leftRads, rightRads));
             float correction = headingPid.compute(pose.getH());
+            Serial.print(" | Correction: ");
+            Serial.print(correction);
             
             if (driveSpeed > 0 && driveSpeed < MINIMUM_PWM) {driveSpeed = MINIMUM_PWM;}
             if (driveSpeed < 0 && driveSpeed > -MINIMUM_PWM) {driveSpeed = -MINIMUM_PWM;}
             if (distancePid.atTarget(DISTANCE_TOLERANCE_RAD)) break;
 
-            motorL.setPWM((int)(driveSpeed + correction));
-            motorR.setPWM((int)(driveSpeed - correction));
+            motorL.setPWM((int)(driveSpeed - correction));
+            motorR.setPWM((int)(driveSpeed + correction));
 
             delay(10);
         }
@@ -114,11 +116,13 @@ private:
             updatePose();
 
             float correction = headingPid.compute(pose.getH());
+            if (correction > 0 && correction < MINIMUM_PWM) {correction = MINIMUM_PWM;}
+            if (correction < 0 && correction > -MINIMUM_PWM) {correction = -MINIMUM_PWM;}
 
             if (headingPid.atTarget(TURN_TOLERANCE_RAD)) break;
 
-            motorL.setPWM((int)correction);
-            motorR.setPWM(-(int)correction);
+            motorL.setPWM(-(int)correction);
+            motorR.setPWM(+(int)correction);
 
             delay(10);
         }
