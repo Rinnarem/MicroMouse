@@ -23,9 +23,11 @@ public:
     static constexpr float CELL_MM = 180.0f;
     static constexpr float WHEEL_CIRC_MM = 2.0f * PI * 16.0f;
     static constexpr float TIMEOUT_MS = 28000.0f;
-    static constexpr float TURN_TOLERANCE_RAD = 0.1f; // TUNE THIS
+
+    static constexpr float TURN_TOLERANCE_RAD = 0.05f; // TUNE THIS
     static constexpr float DISTANCE_TOLERANCE_RAD = 0.025f; // TUNE THIS
-    static constexpr float MINIMUM_PWM = 55;
+    static constexpr float DEADBAND = 0.0f;
+    static constexpr float MINIMUM_PWM = 55.0f;
 
     MotionController(Pose& pose, Lidars& lidars, MPU6050& imu, Motor& motorL, Motor& motorR,
                         DualEncoder& encoder, PIDController& headingPid, 
@@ -61,6 +63,8 @@ public:
             float correction = headingPid.compute(pose.getH());
             Serial.print(" | Correction: ");
             Serial.print(correction);
+            Serial.print(" | driveSpeed: ");
+            Serial.print(driveSpeed);
 
             if (distancePid.atTarget(DISTANCE_TOLERANCE_RAD)) break;
 
@@ -71,7 +75,7 @@ public:
         }
 
         stop();
-        delay(200);
+        delay(700);
         correctPoseAtWall();
 
         return true;
@@ -91,13 +95,14 @@ public:
     void stop() {
         motorL.setPWM(0);
         motorR.setPWM(0);
+
     }
 
 
 private:
 
     bool turn(float deltaH) {
-        float startH = pose.getH();
+        float startH = pose.getGyroYaw();
         float targetH = startH + deltaH;
 
         headingPid.zeroAndSetTarget(startH, deltaH);
@@ -113,9 +118,7 @@ private:
 
             updatePose();
 
-            float correction = headingPid.compute(pose.getH());
-            Serial.print(" | Correction: ");
-            Serial.print(correction);
+            float correction = headingPid.compute(pose.getGyroYaw());
 
             if (headingPid.atTarget(TURN_TOLERANCE_RAD)) break;
 
@@ -123,10 +126,10 @@ private:
             motorR.setPWM(+(int)addPwmFloor(correction));
 
             delay(10);
-        }
-
+        }   
         stop();
-        delay(200);
+        delay(700);
+
         return true;
     }
 
@@ -145,13 +148,16 @@ private:
 
     // Scans wall and corrects pose, called after maze step executed
     void correctPoseAtWall() {
-        lidars.scan();
+        for (int i = 0; i < mtrn3100::Lidars::BUFFER_SIZE; i++) {
+            lidars.scan();
+        }
         pose.snapToWall(lidars.getFrontMM(), lidars.getLeftMM(), lidars.getRightMM(),
                             lidars.hasWallFront(), lidars.hasWallLeft(), lidars.hasWallRight());
     }
 
     // ensures drive Speed is above minimum pwm
     float addPwmFloor(float driveSpeed) {
+        if (fabs(driveSpeed) < DEADBAND) {return 0.0;}
         if (driveSpeed > 0 && driveSpeed < MINIMUM_PWM) {driveSpeed = MINIMUM_PWM;}
         if (driveSpeed < 0 && driveSpeed > -MINIMUM_PWM) {driveSpeed = -MINIMUM_PWM;}
         return driveSpeed;
