@@ -21,7 +21,7 @@ public:
     static constexpr float ROBOT_WIDTH_MM = 92.0f; //TODO : Determine empirically
     static constexpr float CELL_MM = 180.0f;
 
-    static constexpr float ALPHA = 0.999f; // for complementary filter
+    static constexpr float ALPHA = 1.0f; // for complementary filter
     static constexpr float LIDAR_TRUST = 0.67f; 
     static constexpr float LATERAL_TOLERANCE = 10.0f;
 
@@ -162,6 +162,10 @@ public:
     // returns heading
     float getH() const {
         return h;
+    }
+
+    float getGyroYaw() const {
+        return radians(mpu.getAngleZ()) * IMU_CW_SIGN;
     }
 
     private:
