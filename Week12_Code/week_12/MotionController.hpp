@@ -23,8 +23,8 @@ public:
     static constexpr float CELL_MM = 180.0f;
     static constexpr float WHEEL_CIRC_MM = 2.0f * PI * 16.0f;
     static constexpr float TIMEOUT_MS = 28000.0f;
-    static constexpr float TURN_TOLERANCE_RAD = 0.03f; // TUNE THIS
-    static constexpr float DISTANCE_TOLERANCE_RAD = 0.05f; // TUNE THIS
+    static constexpr float TURN_TOLERANCE_RAD = 0.1f; // TUNE THIS
+    static constexpr float DISTANCE_TOLERANCE_RAD = 0.025f; // TUNE THIS
     static constexpr float MINIMUM_PWM = 55;
 
     MotionController(Pose& pose, Lidars& lidars, MPU6050& imu, Motor& motorL, Motor& motorR,
@@ -61,13 +61,11 @@ public:
             float correction = headingPid.compute(pose.getH());
             Serial.print(" | Correction: ");
             Serial.print(correction);
-            
-            if (driveSpeed > 0 && driveSpeed < MINIMUM_PWM) {driveSpeed = MINIMUM_PWM;}
-            if (driveSpeed < 0 && driveSpeed > -MINIMUM_PWM) {driveSpeed = -MINIMUM_PWM;}
+
             if (distancePid.atTarget(DISTANCE_TOLERANCE_RAD)) break;
 
-            motorL.setPWM((int)(driveSpeed - correction));
-            motorR.setPWM((int)(driveSpeed + correction));
+            motorL.setPWM((int)addPwmFloor(driveSpeed - correction));
+            motorR.setPWM((int)addPwmFloor(driveSpeed + correction));
 
             delay(10);
         }
@@ -116,17 +114,19 @@ private:
             updatePose();
 
             float correction = headingPid.compute(pose.getH());
-            if (correction > 0 && correction < MINIMUM_PWM) {correction = MINIMUM_PWM;}
-            if (correction < 0 && correction > -MINIMUM_PWM) {correction = -MINIMUM_PWM;}
+            Serial.print(" | Correction: ");
+            Serial.print(correction);
 
             if (headingPid.atTarget(TURN_TOLERANCE_RAD)) break;
 
-            motorL.setPWM(-(int)correction);
-            motorR.setPWM(+(int)correction);
+            motorL.setPWM(-(int)addPwmFloor(correction));
+            motorR.setPWM(+(int)addPwmFloor(correction));
 
             delay(10);
         }
 
+        stop();
+        delay(200);
         return true;
     }
 
@@ -137,6 +137,8 @@ private:
 
         mpu.update();
         float gyroYaw = mpu.getAngleZ();
+        Serial.print(" | Gyro Yaw: ");
+        Serial.print(gyroYaw);
         pose.update(leftRads, rightRads, gyroYaw);
 
     }
@@ -146,6 +148,13 @@ private:
         lidars.scan();
         pose.snapToWall(lidars.getFrontMM(), lidars.getLeftMM(), lidars.getRightMM(),
                             lidars.hasWallFront(), lidars.hasWallLeft(), lidars.hasWallRight());
+    }
+
+    // ensures drive Speed is above minimum pwm
+    float addPwmFloor(float driveSpeed) {
+        if (driveSpeed > 0 && driveSpeed < MINIMUM_PWM) {driveSpeed = MINIMUM_PWM;}
+        if (driveSpeed < 0 && driveSpeed > -MINIMUM_PWM) {driveSpeed = -MINIMUM_PWM;}
+        return driveSpeed;
     }
 
     Pose& pose;
