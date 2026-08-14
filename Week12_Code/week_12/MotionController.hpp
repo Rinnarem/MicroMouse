@@ -24,8 +24,8 @@ public:
     static constexpr float WHEEL_CIRC_MM = 2.0f * PI * 16.0f;
     static constexpr float TIMEOUT_MS = 28000.0f;
 
-    static constexpr float TURN_TOLERANCE_RAD = 0.05f; // TUNE THIS
-    static constexpr float DISTANCE_TOLERANCE_RAD = 0.025f; // TUNE THIS
+    static constexpr float TURN_TOLERANCE_RAD = 0.05f; 
+    static constexpr float DISTANCE_TOLERANCE_RAD = 0.025f;
     static constexpr float DEADBAND = 0.0f;
     static constexpr float MINIMUM_PWM = 55.0f;
 
