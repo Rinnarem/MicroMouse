@@ -46,18 +46,19 @@ public:
         float y = pose.getY() * 1000.0f; 
         float h = pose.getH(); 
 
-        float projectedMM = x * cos(h) + y * sin(h);
-        float shiftedMM = projectedMM - (CELL_MM / 2.0f);
+        float projectedMM = x * sin(h) - y * cos(h);
+        float shiftedMM = projectedMM + (CELL_MM / 2.0f);
 
         float intoCurrentCell = fmod(shiftedMM, CELL_MM);
         if (intoCurrentCell < 0) {
             intoCurrentCell += CELL_MM;
         }
 
-        flaot remainingMM = CELL_MM - intoCurrentCell;
+        float remainingMM = CELL_MM - intoCurrentCell;
 
         float targetRads = (remainingMM / WHEEL_CIRC_MM) * 2.0f * PI;
         encoder.reset();
+        pose.resetEncoderReference();
         float startH = h;
         headingPid.zeroAndSetTarget(startH, 0.0f);
         distancePid.zeroAndSetTarget(0.0f, targetRads);
@@ -124,6 +125,8 @@ private:
         float targetH = startH + deltaH;
 
         headingPid.zeroAndSetTarget(startH, deltaH);
+        encoder.reset();
+        pose.resetEncoderReference();
 
         unsigned long start = millis();
 
@@ -137,6 +140,8 @@ private:
             updatePose();
 
             float correction = headingPid.compute(pose.getGyroYaw());
+            Serial.print(" | Correction :");
+            Serial.print(correction);
 
             if (headingPid.atTarget(TURN_TOLERANCE_RAD)) break;
 

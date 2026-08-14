@@ -50,7 +50,7 @@
 #define LIDAR_LEFT_EN   A0
 
 // PID gains 
-#define HEADING_KP  200.0f
+#define HEADING_KP  130.0f
 #define HEADING_KI  0.0f
 #define HEADING_KD  0.1f
 #define DISTANCE_KP 14.0f

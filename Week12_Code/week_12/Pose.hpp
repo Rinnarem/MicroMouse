@@ -31,15 +31,23 @@ public:
     // updates the estimated pose of the micromouse using encoder odometry and imu and using a complementary filter
     void update(float leftRads, float rightRads, float gyroYaw) {
         
-        // update x and y coordinates using wheel odometry
-        odometry.update(leftRads, rightRads);
-        x = odometry.getX();
-        y = odometry.getY();
+        float ds = odometry.getLinearDisplacement(leftRads, rightRads);
+
+
+        // // update x and y coordinates using wheel odometry
+        // odometry.update(leftRads, rightRads);
+        // x = odometry.getX();
+        // y = odometry.getY();
 
         // get change in heading from gyro
         float gyroYawRad = radians(gyroYaw) * IMU_CW_SIGN;
         float gyroDelta = gyroYawRad - prevGyroYawRad;
         prevGyroYawRad = gyroYawRad;
+
+        float hMid = h + gyroDelta / 2.0f;
+        x += ds * sin(hMid);
+        y -= ds * cos(hMid);
+
 
         // complementary filter: corrects drift from gyro with heading from wheel encoders
         // note: wheel encoders more accurate long term, gyro more accurate short term
@@ -149,6 +157,9 @@ public:
         prevGyroYawRad = radians(mpu.getAngleZ()) * IMU_CW_SIGN;
     }
 
+    void resetEncoderReference() {
+        odometry.zeroLastPositions();
+    }
     // returns x coordinate
     float getX() const {
         return x;

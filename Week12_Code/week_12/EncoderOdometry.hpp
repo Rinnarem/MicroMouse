@@ -56,6 +56,25 @@ public:
     float getY() const { return y; }   // metres
     float getH() const { return h; }   // radians (heading)
 
+    float getLinearDisplacement(float leftRads, float rightRads) {
+        float dL = leftRads  - lastLPos;   // change in left wheel angle
+        float dR = rightRads - lastRPos;   // change in right wheel angle
+
+        // Differential drive forward kinematics
+        float ds     = R * (dR + dL) / 2.0f;   // linear displacement (m)
+
+        lastLPos = leftRads;
+        lastRPos = rightRads;
+
+        return ds;
+    }
+
+    void zeroLastPositions() {
+        lastLPos = 0;
+        lastRPos = 0;
+    
+    }
+
 private:
     float x, y, h;
     const float R, B;
