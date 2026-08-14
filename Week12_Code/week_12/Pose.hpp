@@ -17,8 +17,8 @@ public:
     static constexpr float IMU_CW_SIGN = -1.0f;
     static constexpr float WHEEL_RADIUS_M  = 0.016f;
     static constexpr float  AXLE_LENGTH_M   = 0.092f;
-    static constexpr float FRONT_CENTRE_OFFSET_MM = 90.0f; // TODO: measure front lidar with robot in centre and update value
-    static constexpr float ROBOT_WIDTH_MM = 92.0f; //TODO : Determine empirically
+    static constexpr float FRONT_CENTRE_OFFSET_MM = 45.0f; 
+    static constexpr float ROBOT_WIDTH_MM = 96.0f; //TODO : Determine empirically
     static constexpr float CELL_MM = 180.0f;
 
     static constexpr float ALPHA = 1.0f; // for complementary filter
