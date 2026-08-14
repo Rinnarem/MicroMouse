@@ -10,7 +10,7 @@
  */
 
 #define TASK_NUM 1
-#define PATH "rrrrrr"
+#define PATH "frrfll"
 
 #include <Wire.h>
 #include <MPU6050_light.h>
@@ -42,12 +42,12 @@
 #define LIDAR_LEFT_EN   A0
 
 // PID gains — placeholders, to be tuned
-#define HEADING_KP  150.0f
-#define HEADING_KI  0.001f
-#define HEADING_KD  0.3f
-#define DISTANCE_KP 10.0f
-#define DISTANCE_KI 0.2f
-#define DISTANCE_KD 0.01f
+#define HEADING_KP  200.0f
+#define HEADING_KI  0.0f
+#define HEADING_KD  0.1f
+#define DISTANCE_KP 14.0f
+#define DISTANCE_KI 0.0f
+#define DISTANCE_KD 0.1f
 
 // Tuned Parameters
 #define WALL_THRESHOLD 100
