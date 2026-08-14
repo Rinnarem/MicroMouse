@@ -12,6 +12,14 @@
 #define TASK_NUM 1
 #define PATH "frrfll"
 
+#define GOAL_ROW  8
+#define GOAL_COL  8
+#define START_ROW 0
+#define START_COL 0
+#define START_DIR mtrn3100::Maze::SOUTH
+
+#define USE_LIDAR_CORRECTION 1 // 0: odometry only, 1: with snaptoWall correction
+
 #include <Wire.h>
 #include <MPU6050_light.h>
 
@@ -41,7 +49,7 @@
 #define LIDAR_RIGHT_EN  A1
 #define LIDAR_LEFT_EN   A0
 
-// PID gains — placeholders, to be tuned
+// PID gains 
 #define HEADING_KP  200.0f
 #define HEADING_KI  0.0f
 #define HEADING_KD  0.1f
@@ -51,10 +59,7 @@
 
 // Tuned Parameters
 #define WALL_THRESHOLD 100
-
-#define GOAL_ROW  8
-#define GOAL_COL  8
-
+#define CELL_M 0.18f;
 const uint16_t CPR = 690;
 
 // Hardware
@@ -95,7 +100,24 @@ void initHardware() {
     mpu.calcOffsets(true, true);
     Serial.println("IMU ready.");
 
-    pose.reset();
+    float x = (START_COL + 0.5f) * CELL_M;
+    float y = (START_ROW + 0.5f) * CELL_M;
+    float h;
+    switch (START_DIR) {
+        case mtrn3100::Maze::NORTH:
+            h = 0;
+            break;
+        case mtrn3100::Maze::EAST:
+            h = M_PI / 2;
+            break;
+        case mtrn3100::Maze::SOUTH:
+            h = M_PI;
+            break;
+        case mtrn3100::Maze::WEST:
+            h = -M_PI / 2;
+            break;
+    }
+    pose.reset(x, y, h);
 
     motion.stop();
 }
@@ -103,6 +125,8 @@ void initHardware() {
 void setup() {
     Serial.begin(115200);
     initHardware();
+
+    motion.setLidarCorrection(USE_LIDAR_CORRECTION);
 }
 
 void loop() {
@@ -113,7 +137,7 @@ void loop() {
     delay(3000);
 
     #if TASK_NUM == 1 
-        mazeNav.executePath(PATH);
+        mazeNav.executePath(PATH, START_ROW, START_COL, START_DIR);
 
     #elif (TASK_NUM == 2) 
         //TODO: implement task 2

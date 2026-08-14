@@ -35,12 +35,30 @@ public:
         : pose(pose), lidars(lidars), mpu(imu), motorL(motorL), motorR(motorR),
         encoder(encoder), headingPid(headingPid), distancePid(distancePid) {}
 
+    
+    void setLidarCorrection(bool enabled) {lidarCorrectionEnabled = enabled;}
+
     // Moves the micromouse forward one cell, returns true if successful
     bool forwardOneCell() {
         
-        float targetRads = (CELL_MM / WHEEL_CIRC_MM) * 2.0f * PI;
+        updatePose();
+        float x = pose.getX() * 1000.0f; 
+        float y = pose.getY() * 1000.0f; 
+        float h = pose.getH(); 
+
+        float projectedMM = x * cos(h) + y * sin(h);
+        float shiftedMM = projectedMM - (CELL_MM / 2.0f);
+
+        float intoCurrentCell = fmod(shiftedMM, CELL_MM);
+        if (intoCurrentCell < 0) {
+            intoCurrentCell += CELL_MM;
+        }
+
+        flaot remainingMM = CELL_MM - intoCurrentCell;
+
+        float targetRads = (remainingMM / WHEEL_CIRC_MM) * 2.0f * PI;
         encoder.reset();
-        float startH = pose.getH();
+        float startH = h;
         headingPid.zeroAndSetTarget(startH, 0.0f);
         distancePid.zeroAndSetTarget(0.0f, targetRads);
 
@@ -148,6 +166,7 @@ private:
 
     // Scans wall and corrects pose, called after maze step executed
     void correctPoseAtWall() {
+        if (!lidarCorrectionEnabled) return;
         for (int i = 0; i < mtrn3100::Lidars::BUFFER_SIZE; i++) {
             lidars.scan();
         }
@@ -162,6 +181,8 @@ private:
         if (driveSpeed < 0 && driveSpeed > -MINIMUM_PWM) {driveSpeed = -MINIMUM_PWM;}
         return driveSpeed;
     }
+
+    bool lidarCorrectionEnabled = true;
 
     Pose& pose;
     Lidars& lidars;
