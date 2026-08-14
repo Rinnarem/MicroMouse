@@ -34,8 +34,10 @@ public:
         // Midpoint Euler integration: use heading at the midpoint of the arc
         // for better accuracy on curved paths than using the old heading alone.
         float hMid = h + dtheta / 2.0f;
-        x += ds * cos(hMid);
-        y += ds * sin(hMid);
+        
+        // heading assumed with north = 0, east = 90 degrees
+        x += ds * sin(hMid);
+        y += ds * cos(hMid);
         h += dtheta;
 
         lastLPos = leftRads;
