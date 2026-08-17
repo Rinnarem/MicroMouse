@@ -24,6 +24,7 @@ class Maze {
         }
         // ...and all cells unvisited (packed one bit per cell)
         for (uint8_t i = 0; i < sizeof(visited); i++) visited[i] = 0;
+        cellsVisited = 0;
 
         // Set boundaries for cells on top and bottom row
         for (uint8_t i = 0; i < SIZE; i++) {
@@ -82,7 +83,14 @@ class Maze {
     }
 
     // Populates each cell with the distance to the goal cell
-    void floodFill(uint8_t goalRow, uint8_t goalCol) {
+    void floodFill() {
+        // set all cells to max dist
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++) {
+                distance[i][j] = MAX_DIST;
+            }
+        }
+
         // mark goal as distance 0
         distance[goalRow][goalCol] = 0;
         uint8_t currExploredVal = 0;
@@ -120,20 +128,96 @@ class Maze {
     }
 
     void setVisited(uint8_t row, uint8_t col, bool value) {
+
+        // update num cells visited
+        if (value == true && !isVisited(row, col)) {
+            cellsVisited++;
+        }
+
         uint8_t idx = row * SIZE + col;
         if (value) visited[idx >> 3] |=  (1 << (idx & 7));
         else       visited[idx >> 3] &= ~(1 << (idx & 7));
+
+        
     }
 
-    // Determines the next direction the robot should travel from a given cell
+    // Determines the next direction the robot should travel from a given cell for shortest path
     Direction nextStep(uint8_t row, uint8_t col, Direction currDir) const {
-        //TODO
+        
+        Direction best = compareNextSteps(row, col, currDir, NORTH, EAST);
+        best = compareNextSteps(row, col, currDir, best, SOUTH);
+        best = compareNextSteps(row, col, currDir, best, WEST);
+
+        return best;
+    }
+
+    Direction compareNextSteps(uint8_t row, uint8_t col, Direction currDir, Direction a, Direction b) const {
+
+        // return direction that doesnt have wall
+        if (hasWall(row, col, a)) {return b;}
+
+        if (hasWall(row, col, b)) {return a;}
+
+        // return direction closer to goal
+        uint8_t currDist = getDistance(row, col);
+
+        uint8_t rowA = getNeighbourRow(row, a);
+        uint8_t colA = getNeighbourCol(col, a);
+        uint8_t distA = getDistance(rowA, colA);
+        
+        if (distA > currDist) {return b;}
+        
+        uint8_t rowB = getNeighbourRow(row, b);
+        uint8_t colB = getNeighbourCol(col, b);
+
+        uint8_t distB = getDistance(rowB, colB);
+
+        if (distB > currDist) {return a;}
+
+        // return same direction if both are closer to goal (less turning)
+        return (a == currDir) ? a : b;
     }
 
     // Writes path commands into out with a null terminator, returns the number of commands written
     // not including null terminator
-    uint8_t getPathCommands(uint8_t startRow, uint8_t startCol, Direction startDir) {
-        //TODO
+    uint8_t getPathCommands(uint8_t startRow, uint8_t startCol, Direction startDir,
+                         char* out, uint8_t maxLen) {
+        uint8_t row = startRow, col = startCol;
+        Direction dir = startDir;
+        uint8_t count = 0;
+
+        if (distance[row][col] == MAX_DIST) {
+            out[0] = '\0';
+            return 0;   // goal not reachable with what's currently mapped
+        }
+
+        while (distance[row][col] != 0 && count < maxLen - 1) {
+            Direction target = nextStep(row, col, dir);
+
+            if (target == dir) {
+                out[count++] = 'f';
+                switch (dir) {
+                    case NORTH: row--; break;
+                    case SOUTH: row++; break;
+                    case EAST:  col++; break;
+                    case WEST:  col--; break;
+                }
+            } else if (target == (Direction)((dir + 1) % 4)) {
+                out[count++] = 'r';
+                dir = target;
+            } else if (target == (Direction)((dir + 3) % 4)) {
+                out[count++] = 'l';
+                dir = target;
+            } else {
+                // target is directly behind us — two turns
+                out[count++] = 'r';
+                if (count < maxLen - 1) out[count++] = 'r';
+                dir = target;
+            }
+        }
+
+        out[count] = '\0';
+        return count;
     }
 
     void print() const {
@@ -166,6 +250,105 @@ class Maze {
             printf(hasWall(SIZE - 1, c, SOUTH) ? "---" : "   ");
         }
         printf("+\n");
+    }
+
+    // determines which way the robot should go next to explore the maze
+    Direction nextCellToExplore(uint8_t row, uint8_t col) {
+
+        // compare the four candidates for next cell
+        Direction best = compareCandidates(row, col, NORTH, EAST);
+        best = compareCandidates(row, col, best, SOUTH);
+        best = compareCandidates(row, col, best, WEST);
+        
+        return best;     
+    }
+
+    // compares two directions and determines which one is better for the next step in exploration
+    Direction compareCandidates(uint8_t row, uint8_t col, Direction a, Direction b) {
+
+        // return a if b has wall (this will also return a if they both have walls)
+        if (hasWall(row, col, b)) {return a;}
+
+        // return b if a has wall
+        if (hasWall(row, col, a)) {return b;}
+
+
+        // return a if b has been visited (will also return a if its been visited)
+        uint8_t bRow = getNeighbourRow(row, b);
+        uint8_t bCol = getNeighbourCol(col, b);
+        if (isVisited(bRow, bCol)) {return a;}
+        
+        // return b if a has been visited
+        uint8_t aRow = getNeighbourRow(row, a);
+        uint8_t aCol = getNeighbourCol(col, a);
+
+        if (isVisited(aRow, aCol)) {return b;}
+
+        // return lower of two distances
+        uint8_t distA = getDistance(aRow, aCol);
+        uint8_t distB = getDistance(bRow, bCol);
+
+        return (distA <= distB) ? a : b;
+
+    }
+
+    uint8_t getNeighbourRow(uint8_t row, Direction dir) const {
+
+        if (dir == EAST || dir == WEST) {
+            return row;
+        } else if (dir == NORTH) {
+            return row - 1;
+        } else {
+            return row + 1;
+        }
+    }
+
+    uint8_t getNeighbourCol(uint8_t col, Direction dir) const {
+
+        if (dir == SOUTH || dir == NORTH) {
+            return col;
+        } else if (dir == WEST) {
+            return col - 1;
+        } else {
+            return col + 1;
+        }
+    }
+
+    // Returns true if all cells have been marked as visited
+    bool isFullyExplored() const {
+        return (cellsVisited == SIZE * SIZE) ? true : false;
+
+    }
+
+    void resetCompletionStatus() {
+        cellsVisited = 0;
+    }
+
+    uint8_t getNumCellsVisited() const {
+        return cellsVisited;
+    }
+
+    // Returns completion percentage as an int between 0 - 100
+    uint8_t completionPercentage() const {
+        float result = float(cellsVisited) / (SIZE * SIZE);
+
+        return static_cast<uint8_t>(result * 100);
+    }
+
+    uint8_t getGoalRow() const {
+        return goalRow;
+    }
+
+    uint8_t getGoalCol() const {
+        return goalCol;
+    }
+
+    // Sets new target in maze and updates flood fill distances
+    void setGoal( uint8_t row, uint8_t col) {
+        goalRow = row;
+        goalCol = col;
+
+        floodFill();
     }
 
     private: 
@@ -209,6 +392,7 @@ class Maze {
        
        uint8_t goalRow; 
        uint8_t goalCol;
+       uint8_t cellsVisited;
 
 };
 

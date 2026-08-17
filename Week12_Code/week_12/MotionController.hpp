@@ -254,6 +254,21 @@ public:
 
     }
 
+    void scanLidars() {
+        lidars.scan();
+    }
+
+    bool hasWallFront() {
+        return lidars.hasWallFront();
+    }
+
+    bool hasWallLeft() {
+        return lidars.hasWallLeft();
+    }
+    bool hasWallRight() {
+        return lidars.hasWallRight();
+    }
+
 
 private:
 

@@ -168,7 +168,7 @@ void setup() {
         Serial.println(F(")"));
         Serial.print(F("  image used: ")); Serial.println(F(GEN_TASK42_IMAGE));
     #elif TASK_NUM == 3
-        Serial.println(F("TASK 3  - 4.3 NOT IMPLEMENTED, robot will not move"));
+        Serial.println(F("TASK 3  - 4.3 IMPLEMENTED, robot will move"));
     #elif TASK_NUM == 4
         Serial.println(F("TASK 4  - 4.2 full maze"));
         Serial.print(F("  place robot at cell ("));

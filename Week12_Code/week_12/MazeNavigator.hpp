@@ -39,8 +39,57 @@ public:
     }
 
     // 4.3 - autonomously explores the maze, maps walls, and solves the shortest path
-    bool exploreAndSolveMaze() {
-        //TODO
+    bool exploreAndSolveMaze(uint8_t startRow, uint8_t startCol, Maze::Direction startDir) {
+
+        // Explore the maze
+        bool fullyExplored = false;
+        maze.resetCompletionStatus();
+        maze.setVisited(currRow, currCol, true);
+
+        while (fullyExplored == false) {
+
+            // update walls surrounding cell
+            bool changed = updateSurroundingWalls();
+
+            // update maze
+            if (changed) {maze.floodFill();}
+
+            // determine next step
+            turnToNextCell();
+            motion.forwardOneCell();
+            updateLocationForward();
+
+            maze.setVisited(currRow, currCol, true);
+
+            // update fully explored and %completed status
+            fullyExplored = maze.isFullyExplored();
+        }
+        
+        // Get string of commands to navigate back to start position
+        // navigate back to start position
+        uint8_t goalRow = maze.getGoalRow();
+        uint8_t goalCol = maze.getGoalCol();
+        maze.setTarget(startRow, startCol);
+
+        // go back to start position
+        const uint8_t MAX_PATH_LEN = 100;
+        char path[MAX_PATH_LEN];
+        uint8_t pathLen = maze.getPathCommands(currRow, currCol, currDir, path, MAX_PATH_LEN);
+        executePath(path, currRow, currCol, currDir);
+
+        // correct start orientation
+        while (currDir != startDir) {
+            motion.turnLeft90();
+            currDir = directionLeftTurn();
+        }
+
+        // set target back to goal and get path
+        maze.setGoal(goalRow, goalCol);
+        
+        // execute shortest path to goal
+        uint8_t pathLen = maze.getPathCommands(currRow, currCol, currDir, path, MAX_PATH_LEN);
+        executePath(path, currRow, currCol, currDir);
+
         return true;
     }
 
@@ -59,14 +108,14 @@ private:
             
             case 'l':
                 success = motion.turnLeft90();
-                updateLocationLeftTurn();
+                currDir = directionLeftTurn();
                 break;
 
             case 'r':
                 success = motion.turnRight90();
-                updateLocationRightTurn();
-
+                currDir = directionRightTurn();
                 break;
+
             default:
                 Serial.print(F("Unknown command"));
                 return false;
@@ -93,38 +142,123 @@ private:
         }
     }
 
-    void updateLocationRightTurn() {
+    Maze::Direction directionRightTurn() {
         switch(currDir) {
             case Maze::NORTH:
-                currDir = Maze::EAST;
+                return Maze::EAST;
                 break;
             case Maze::SOUTH: 
-                currDir = Maze::WEST;
+                return Maze::WEST;
                 break;
             case Maze::WEST:
-                currDir = Maze::NORTH;
+                return Maze::NORTH;
                 break;
             case Maze::EAST:
-                currDir = Maze::SOUTH;
+                return Maze::SOUTH;
                 break;
         }
     }
 
-    void updateLocationLeftTurn() {
+    Maze::Direction directionLeftTurn() {
         switch(currDir) {
             case Maze::NORTH:
-                currDir = Maze::WEST;
+                return Maze::WEST;
                 break;
             case Maze::SOUTH: 
-                currDir = Maze::EAST;
+                return Maze::EAST;
                 break;
             case Maze::WEST:
-                currDir = Maze::SOUTH;
+                return Maze::SOUTH;
                 break;
             case Maze::EAST:
-                currDir = Maze::NORTH;
+                return Maze::NORTH;
                 break;
         }
+    }
+
+    Maze::Direction directionBehind() {
+        switch(currDir) {
+            case Maze::NORTH:
+                return Maze::SOUTH;
+                break;
+            case Maze::SOUTH: 
+                return Maze::NORTH;
+                break;
+            case Maze::WEST:
+                return Maze::EAST;
+                break;
+            case Maze::EAST:
+                return Maze::WEST;
+                break;
+        }
+    }
+
+    // Updates the maze and sets walls in current cell from lidar readings, 
+    // if there are already walls there doesn't check to update,
+    //  or if the cell on the other side has been visited
+    bool updateSurroundingWalls() {
+        bool updated = false;
+
+        motion.scanLidars();
+        bool hasWallLeft = motion.hasWallLeft();
+        bool hasWallFront = motion.hasWallFront();
+        bool hasWallRight = motion.hasWallRight();
+
+        // loop through each direction robot is facing
+        for (int i = 0; i < 3; i++) {
+            Maze::Direction dir = getDirectionForUpdating(i);
+
+            if (!maze.hasWall(currRow, currCol, dir)) {
+                // check lidar in that direction, and if it has a wall update the maze
+                if (i == 0 && hasWallLeft) {
+                    maze.setWall(currRow, currCol, dir, true);
+                    updated = true;
+                } else if (i == 1 && hasWallFront) {
+                    maze.setWall(currRow, currCol, dir, true);
+                    updated = true;
+                } else if (i == 2 && hasWallRight) {
+                    maze.setWall(currRow, currCol, dir, true);
+                    updated = true;
+                }
+                    
+            }
+
+        }
+        return updated;
+    }
+    
+
+    // Returns cardinal direction from maze orientation, 
+    // i = 0 is Robots left
+    // i = 1 ahead, i = 2 to right, i = 3 behind
+    Maze::Direction getDirectionForUpdating(int i) {
+        if (i == 0) {
+            return directionLeftTurn();
+        } else if (i == 1) {
+            return currDir;
+        } else if (i == 2) {
+            return directionRightTurn();
+        } else {
+            return directionBehind();
+        }
+    }
+
+    // Turns to neighbour cell which is unvisited
+    // with no wall and closest distance to target
+    void turnToNextCell() {
+        Maze::Direction targetDir = maze.nextCellToExplore(currRow, currCol);
+
+        if (directionRightTurn() == targetDir) {
+            motion.turnRight90();
+            currDir = targetDir;
+        } else {
+            while (currDir != targetDir) {
+                motion.turnLeft90();
+                currDir = directionLeftTurn();
+            }
+
+        }
+
     }
 
     Maze& maze;
