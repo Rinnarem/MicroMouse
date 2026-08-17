@@ -21,11 +21,11 @@ from matplotlib import pyplot as plt
 # ============================================================
 # CONFIGURATION  — UPDATE ON ASSESSMENT DAY
 # ============================================================
-IMAGE_FILE = "pic011.jpeg"
+IMAGE_FILE = "pic007.jpg"
 
 # Tutor gives: (Coord1=row, Coord2=col, Heading)
-START_ROW = 1;  START_COL = 5;  START_DIR = 'N'   # example from slide
-GOAL_ROW  = 7;  GOAL_COL  = 2
+START_ROW = 0;  START_COL = 4;  START_DIR = 'E'
+GOAL_ROW  = 8;  GOAL_COL  = 6
 GOAL_DIR  = None  # staff clarification: face the direction used to enter the goal
 
 MAZE_SIZE   = 9
@@ -34,7 +34,15 @@ OCTAGON_CUT = 2
 
 # Per-edge wall detection — more permissive to catch grey & shiny walls
 WALL_DARK_THRESH     = 130
-WALL_RATIO_THRESHOLD = 0.25   # walls ~70-100%, open gaps ~0-5%
+
+# A boundary counts as walled if the dark structure crossing it is at least
+# this many pixels thick. Measured on the lab photos: real walls come out
+# 3-25 px depending on how side-on the camera sees them, the seam between the
+# two floor plates comes out 1-2 px, and open floor comes out 0.
+WALL_MIN_THICKNESS_PX = 3
+WALL_SCAN_REACH_PX    = 16    # how far either side of the boundary to look
+
+WALL_RATIO_THRESHOLD = 0.25   # (unused; kept so old configs still import)
 
 # Canny edges catch shiny/reflective walls that appear BRIGHT in the image
 USE_CANNY  = True
@@ -44,7 +52,6 @@ CANNY_HIGH = 200
 OUTPUT_SIZE = 900   # warped image side length in px
 
 # Paste corners here after first run to skip clicking:
-# MANUAL_CORNERS = [(x1,y1), (x2,y2), (x3,y3), (x4,y4)]
 MANUAL_CORNERS = None
 
 # ============================================================
@@ -190,25 +197,49 @@ def make_wall_mask(gray):
 # ============================================================
 # WALL DETECTION  (narrow band around cell boundary midpoint)
 # ============================================================
-def wall_between(mask, x1, y1, x2, y2):
-    dx, dy = float(x2-x1), float(y2-y1)
-    L = math.hypot(dx, dy)
-    if L == 0: return False
-    ux, uy = dx/L, dy/L
-    px, py = -dy/L, dx/L
-    mx, my = (x1+x2)/2.0, (y1+y2)/2.0
-    half_length = 0.32 * L
+def wall_thickness(mask, x1, y1, x2, y2, reach=WALL_SCAN_REACH_PX):
+    """Median thickness, in pixels, of the dark structure crossing this
+    cell boundary.
 
-    hit = tot = 0
-    for along in np.linspace(-half_length, half_length, 45):
-        cx, cy = mx + px*along, my + py*along
-        for across in np.linspace(-5, 5, 11):
-            xi = int(round(cx + ux*across))
-            yi = int(round(cy + uy*across))
-            if 0 <= yi < mask.shape[0] and 0 <= xi < mask.shape[1]:
-                tot += 1
-                if mask[yi, xi]: hit += 1
-    return (hit/tot) > WALL_RATIO_THRESHOLD if tot else False
+    Why thickness and not "fraction of dark pixels in a fixed box":
+
+    The camera is never exactly overhead. A wall near the centre of the photo
+    is seen almost edge-on, so only its ~4 px top surface shows. The same wall
+    near the edge of the photo shows its whole side face, 15-25 px across. A
+    fixed-size box therefore scores the first wall at ~0.2 and the second at
+    ~0.9, and no single threshold separates "thin real wall" from "no wall".
+    Walls also shift a few pixels off the grid line, because warping rectifies
+    the floor while the wall tops sit 50 mm above it.
+
+    Thickness is immune to both. It also tells a wall apart from the seam
+    between the two floor plates, which is a 1-2 px line that a
+    fraction-based test happily reads as a wall."""
+    dx, dy = float(x2 - x1), float(y2 - y1)
+    L = math.hypot(dx, dy)
+    if L == 0:
+        return 0.0
+    ux, uy = dx / L, dy / L        # across the wall
+    px, py = -dy / L, dx / L       # along the wall
+    mx, my = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+
+    runs = []
+    for along in np.linspace(-0.32 * L, 0.32 * L, 33):
+        cx, cy = mx + px * along, my + py * along
+        best = cur = 0
+        for across in range(-reach, reach + 1):
+            xi = int(round(cx + ux * across))
+            yi = int(round(cy + uy * across))
+            on = (0 <= yi < mask.shape[0] and 0 <= xi < mask.shape[1]
+                  and mask[yi, xi])
+            cur = cur + 1 if on else 0
+            if cur > best:
+                best = cur
+        runs.append(best)
+    return float(np.median(runs))
+
+
+def wall_between(mask, x1, y1, x2, y2):
+    return wall_thickness(mask, x1, y1, x2, y2) >= WALL_MIN_THICKNESS_PX
 
 # ============================================================
 # GRAPH CONSTRUCTION  (skip blocked corner cells)
@@ -221,20 +252,40 @@ def build_graph(mask, centres, n=MAZE_SIZE):
                 g.add_node(r*n+c, *centres[r, c])
 
     open_e = 0
+    marginal = []          # boundaries too close to call
     for r in range(n):
         for c in range(n):
             if is_blocked(r, c): continue
             nid    = r*n+c
             x1, y1 = centres[r, c]
-            if c < n-1 and not is_blocked(r, c+1):
-                if not wall_between(mask, x1, y1, *centres[r, c+1]):
-                    g.add_edge(nid, nid+1); open_e += 1
-            if r < n-1 and not is_blocked(r+1, c):
-                if not wall_between(mask, x1, y1, *centres[r+1, c]):
-                    g.add_edge(nid, nid+n); open_e += 1
+            for dr, dc, step in ((0, 1, 1), (1, 0, n)):
+                r2, c2 = r + dr, c + dc
+                if r2 >= n or c2 >= n or is_blocked(r2, c2):
+                    continue
+                t = wall_thickness(mask, x1, y1, *centres[r2, c2])
+                if t < WALL_MIN_THICKNESS_PX:
+                    g.add_edge(nid, nid + step)
+                    open_e += 1
+                # Only warn about the dangerous direction: something dark is
+                # there, but not thick enough to be called a wall, so the
+                # planner may route straight through it. A borderline call the
+                # other way just makes the path longer, which is harmless.
+                if 0.5 < t < WALL_MIN_THICKNESS_PX:
+                    marginal.append(((r, c), (r2, c2), t))
 
     nav = sum(1 for r in range(n) for c in range(n) if not is_blocked(r,c))
     print(f"  {nav} navigable cells, {open_e} open passages detected")
+
+    if marginal:
+        print(f"  !! {len(marginal)} boundary(s) have something dark but too "
+              f"thin to call a wall (< {WALL_MIN_THICKNESS_PX} px). These are "
+              f"being treated as OPEN:")
+        for a, b, t in marginal:
+            print(f"       {a} - {b}   {t:.1f} px")
+        print("       Usually this is the seam between the two floor plates,")
+        print("       which is correct to ignore. But check these spots in")
+        print("       solved_path.png -- if the path crosses a real wall there,")
+        print("       lower WALL_MIN_THICKNESS_PX to 2.")
     return g
 
 # ============================================================
@@ -368,6 +419,44 @@ def draw_result(warped, g, posts, centres, path=None,
     plt.axis('off'); plt.tight_layout(); plt.show()
 
 # ============================================================
+# ARDUINO HEADER OUTPUT
+# ============================================================
+DIRNAME = {'N': 'NORTH', 'E': 'EAST', 'S': 'SOUTH', 'W': 'WEST'}
+
+
+def write_task41_header(cmd, filename="gen_task41.h"):
+    """Write the Task 4.1 numbers as a header the sketch includes, so there is
+    no hand-copied value that can disagree with what the solver actually
+    computed."""
+    import datetime
+    lines = [
+        "// ===================================================================",
+        "// GENERATED BY maze_solver.py -- DO NOT EDIT BY HAND",
+        "// Re-run  python3 maze_solver.py  to change any of this.",
+        "// ===================================================================",
+        f"// image      : {IMAGE_FILE}",
+        f"// generated  : {datetime.datetime.now():%Y-%m-%d %H:%M:%S}",
+        f"// start      : ({START_ROW}, {START_COL}) facing {DIRNAME[START_DIR]}",
+        f"// goal       : ({GOAL_ROW}, {GOAL_COL})",
+        f"// path       : {len(cmd)} characters",
+        "#pragma once",
+        "",
+        f'#define GEN_TASK41_IMAGE "{IMAGE_FILE}"',
+        "",
+        f'#define PATH      "{cmd}"',
+        f"#define START_ROW {START_ROW}",
+        f"#define START_COL {START_COL}",
+        f"#define START_DIR mtrn3100::Maze::{DIRNAME[START_DIR]}",
+        f"#define GOAL_ROW  {GOAL_ROW}",
+        f"#define GOAL_COL  {GOAL_COL}",
+        "",
+    ]
+    with open(filename, "w") as f:
+        f.write("\n".join(lines))
+    print(f"  Saved {filename}")
+
+
+# ============================================================
 # MAIN
 # ============================================================
 def main():
@@ -418,10 +507,15 @@ def main():
 
     print(f"  Path: {len(path)-1} moves → {path}")
     cmd = path_to_cmds(path)
+    # Written straight to a header the sketch includes -- nothing to copy.
+    write_task41_header(cmd)
     print(f"\n{sep}")
-    print("ARDUINO COMMAND STRING:")
-    print(f'  #define PATH "{cmd}"')
-    print(f"  ({len(cmd)} chars)")
+    print("  gen_task41.h written. NOTHING TO COPY.")
+    print(sep)
+    print(f'  PATH = "{cmd}"   ({len(cmd)} chars, {len(path)-1} moves)')
+    print("  Set TASK_NUM to 1 in week_12.ino, then upload.")
+    print(f"  Place the robot in cell ({START_ROW}, {START_COL}) facing "
+          f"{DIRNAME[START_DIR]}.")
     print(sep)
 
     draw_result(warped, g, posts, centres, path=path,
