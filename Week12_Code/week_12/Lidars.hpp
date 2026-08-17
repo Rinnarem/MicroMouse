@@ -44,7 +44,7 @@ public:
         lidarLeft.init(); lidarLeft.configureDefault();
         lidarLeft.setTimeout(250); lidarLeft.setAddress(0x58);
 
-        Serial.println("LiDARs ready.");
+        Serial.println(F("LiDARs ready."));
 
         // fill lidar scans with initial readings
         scan();
@@ -66,7 +66,7 @@ public:
         int f = lidarFront.readRangeSingleMillimeters();
         if (lidarFront.timeoutOccurred()) {
             frontTimedOut = true;
-            Serial.println("LidarArray: front sensor timeout.");
+            Serial.println(F("LidarArray: front sensor timeout."));
         } else {
             frontBuffer[bufferIndex] = (float)f;
         }
@@ -75,7 +75,7 @@ public:
         int r = lidarRight.readRangeSingleMillimeters();
         if (lidarRight.timeoutOccurred()) {
             rightTimedOut = true;
-            Serial.println("LidarArray: right sensor timeout.");
+            Serial.println(F("LidarArray: right sensor timeout."));
         } else {
             rightBuffer[bufferIndex] = (float)r;
         }
@@ -84,7 +84,7 @@ public:
         int l = lidarLeft.readRangeSingleMillimeters();
         if (lidarLeft.timeoutOccurred()) {
             leftTimedOut = true;
-            Serial.println("LidarArray: left sensor timeout.");
+            Serial.println(F("LidarArray: left sensor timeout."));
         } else {
             leftBuffer[bufferIndex] = (float)l;
         }

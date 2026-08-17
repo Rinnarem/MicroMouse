@@ -26,11 +26,11 @@ public:
             bool success = executeCommand(path[i]);
 
             if (!success) {
-                Serial.print("Move failed at command "); 
+                Serial.print(F("Move failed at command ")); 
                 Serial.print(i);
-                Serial.print(" ('");
+                Serial.print(F(" ('"));
                 Serial.print(path[i]);
-                Serial.println("')");
+                Serial.println(F("')"));
                 return false;
             }
             delay(200);
@@ -68,7 +68,7 @@ private:
 
                 break;
             default:
-                Serial.print("Unknown command");
+                Serial.print(F("Unknown command"));
                 return false;
         }
         return success;

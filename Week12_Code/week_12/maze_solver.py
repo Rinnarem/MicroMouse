@@ -21,7 +21,7 @@ from matplotlib import pyplot as plt
 # ============================================================
 # CONFIGURATION  — UPDATE ON ASSESSMENT DAY
 # ============================================================
-IMAGE_FILE = "pic005.jpg"
+IMAGE_FILE = "pic011.jpeg"
 
 # Tutor gives: (Coord1=row, Coord2=col, Heading)
 START_ROW = 1;  START_COL = 5;  START_DIR = 'N'   # example from slide

@@ -15,14 +15,15 @@ class Maze {
     // Constructor for maze class
     Maze(uint8_t goalRow, uint8_t goalCol) : goalRow(goalRow), goalCol(goalCol) {
         
-        // Initialise all cells with no known walls, max distance (255) and unvisited
+        // Initialise all cells with no known walls and max distance
         for (uint8_t i = 0; i < SIZE; i++) {
             for (uint8_t j = 0; j < SIZE; j++) {
-                walls[i][j] = 0; 
+                walls[i][j] = 0;
                 distance[i][j] = MAX_DIST;
-                visited[i][j] = false;
             }
         }
+        // ...and all cells unvisited (packed one bit per cell)
+        for (uint8_t i = 0; i < sizeof(visited); i++) visited[i] = 0;
 
         // Set boundaries for cells on top and bottom row
         for (uint8_t i = 0; i < SIZE; i++) {
@@ -110,6 +111,20 @@ class Maze {
         return distance[row][col];
     }
 
+    // --- visited flags, one bit per cell (for 4.3) ---------------------
+    // Stored packed rather than as bool[9][9]: the Uno has only 2 KB of SRAM
+    // and a byte-per-cell array costs 81 of them for one bit of information.
+    bool isVisited(uint8_t row, uint8_t col) const {
+        uint8_t idx = row * SIZE + col;
+        return (visited[idx >> 3] >> (idx & 7)) & 1;
+    }
+
+    void setVisited(uint8_t row, uint8_t col, bool value) {
+        uint8_t idx = row * SIZE + col;
+        if (value) visited[idx >> 3] |=  (1 << (idx & 7));
+        else       visited[idx >> 3] &= ~(1 << (idx & 7));
+    }
+
     // Determines the next direction the robot should travel from a given cell
     Direction nextStep(uint8_t row, uint8_t col, Direction currDir) const {
         //TODO
@@ -188,7 +203,9 @@ class Maze {
         // 4 bit mask: bit 0 north wall, bit 1 east, bit 2 south, bit 3 west
        uint8_t walls[SIZE][SIZE];
        uint8_t distance[SIZE][SIZE];
-       bool visited[SIZE][SIZE]; // for 4.3
+       // 81 cells, one bit each -> 11 bytes instead of 81. Use
+       // isVisited()/setVisited() rather than touching this directly.
+       uint8_t visited[(SIZE * SIZE + 7) / 8]; // for 4.3
        
        uint8_t goalRow; 
        uint8_t goalCol;

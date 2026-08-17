@@ -8,6 +8,10 @@
 #include "EncoderOdometry.hpp"
 #include <MPU6050_light.h>
 
+#ifndef MOTION_DEBUG
+#define MOTION_DEBUG 0
+#endif
+
 namespace mtrn3100 {
 
 class Pose {
@@ -17,7 +21,7 @@ public:
     static constexpr float IMU_CW_SIGN = -1.0f;
     static constexpr float WHEEL_RADIUS_M  = 0.016f;
     static constexpr float  AXLE_LENGTH_M   = 0.092f;
-    static constexpr float FRONT_CENTRE_OFFSET_MM = 45.0f; 
+    static constexpr float FRONT_CENTRE_OFFSET_MM = 35.0f;  // measured: LiDAR 55mm in front of axle; cell centre 90mm from wall → 90-55=35
     static constexpr float ROBOT_WIDTH_MM = 96.0f; //TODO : Determine empirically
     static constexpr float CELL_MM = 180.0f;
 
@@ -53,15 +57,12 @@ public:
         // note: wheel encoders more accurate long term, gyro more accurate short term
         h = ALPHA * (h + gyroDelta) + (1 - ALPHA) * odometry.getH();
 
-        float hDeg = h * (180 / M_PI);
-        float gyroDeltaDeg = gyroDelta * (180 / M_PI);
-
-        Serial.print("h: ");
-        Serial.print(hDeg);
-
-        Serial.print("|  Gryo Delta: ");
-        Serial.println(gyroDeltaDeg, 4);
-
+#if MOTION_DEBUG
+        Serial.print(F("h: "));
+        Serial.print(h * (180 / M_PI));
+        Serial.print(F("|  Gyro Delta: "));
+        Serial.println(gyroDelta * (180 / M_PI), 4);
+#endif
         return;
     }
 
