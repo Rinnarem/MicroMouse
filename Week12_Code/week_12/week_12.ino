@@ -202,7 +202,7 @@ void loop() {
         }
 
     #elif (TASK_NUM == 3)
-        mazeNav.exploreAndSolveMaze();
+        mazeNav.exploreAndSolveMaze(START_ROW, START_COL, START_DIR);
 
     #elif (TASK_NUM == 4)
         // Full maze run through the obstacle course (Task 4.2, all 5 marks).
