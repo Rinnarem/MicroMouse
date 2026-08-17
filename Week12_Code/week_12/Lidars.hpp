@@ -20,7 +20,7 @@ public:
                 frontPin(front), rightPin(right), leftPin(left), wallThreshold(wallThresholdMM) {} 
 
     // Assigns each lidar an I2C address, called after Wire.begin()
-    void begin() {
+    bool begin() {
         pinMode(frontPin, OUTPUT);
         pinMode(rightPin, OUTPUT);
         pinMode(leftPin,  OUTPUT);
@@ -33,26 +33,48 @@ public:
 
         // Bring each sensor up one at a time and assign unique address
         digitalWrite(frontPin, HIGH); delay(50);
-        lidarFront.init(); lidarFront.configureDefault();
+        lidarFront.init();
+        uint8_t frontID = lidarFront.readReg(VL6180X::IDENTIFICATION__MODEL_ID);
+        if (lidarFront.last_status != 0 || frontID != 0xB4) {
+            Serial.println(F("[LIDAR ERROR] front init failed"));
+            return false;
+        }
+        lidarFront.configureDefault();
         lidarFront.setTimeout(250); lidarFront.setAddress(0x54);
 
         digitalWrite(rightPin, HIGH); delay(50);
-        lidarRight.init(); lidarRight.configureDefault();
+        lidarRight.init();
+        uint8_t rightID = lidarRight.readReg(VL6180X::IDENTIFICATION__MODEL_ID);
+        if (lidarRight.last_status != 0 || rightID != 0xB4) {
+            Serial.println(F("[LIDAR ERROR] right init failed"));
+            return false;
+        }
+        lidarRight.configureDefault();
         lidarRight.setTimeout(250); lidarRight.setAddress(0x56);
 
         digitalWrite(leftPin, HIGH); delay(50);
-        lidarLeft.init(); lidarLeft.configureDefault();
+        lidarLeft.init();
+        uint8_t leftID = lidarLeft.readReg(VL6180X::IDENTIFICATION__MODEL_ID);
+        if (lidarLeft.last_status != 0 || leftID != 0xB4) {
+            Serial.println(F("[LIDAR ERROR] left init failed"));
+            return false;
+        }
+        lidarLeft.configureDefault();
         lidarLeft.setTimeout(250); lidarLeft.setAddress(0x58);
-
-        Serial.println(F("LiDARs ready."));
 
         // fill lidar scans with initial readings
         scan();
+        if (hasError()) {
+            Serial.println(F("[LIDAR ERROR] initial scan failed"));
+            return false;
+        }
         for (uint8_t i = 0; i < BUFFER_SIZE; i++) {
             frontBuffer[i] = frontMM;
             rightBuffer[i] = rightMM;
             leftBuffer[i]  = leftMM;
         }
+        Serial.println(F("LiDARs ready."));
+        return true;
     }
 
     // Scans lidars and updates distances. Uses average distances from past 3 readings
@@ -97,6 +119,81 @@ public:
         leftMM = average(leftBuffer);
     }
 
+    // Read the front sensor only. scan() reads all three and blocks for
+    // ~30 ms, which is too slow to poll inside a control loop; this is ~10 ms.
+    // Returns 255 (i.e. "nothing there") on a timeout so a dead sensor can
+    // never stop the robot early.
+    float scanFrontMM() {
+        int f = lidarFront.readRangeSingleMillimeters();
+        if (lidarFront.timeoutOccurred()) { frontTimedOut = true; return 255.0f; }
+        frontTimedOut = false;
+        return (float)f;
+    }
+
+    // Read only the side sensors for a lightweight in-motion clearance guard.
+    // Returns raw readings; the controller requires two consecutive close
+    // samples before steering, so a single noisy reading is ignored.
+    bool scanSidesMM(float& left, float& right) {
+        int l = lidarLeft.readRangeSingleMillimeters();
+        leftTimedOut = lidarLeft.timeoutOccurred();
+
+        int r = lidarRight.readRangeSingleMillimeters();
+        rightTimedOut = lidarRight.timeoutOccurred();
+
+        if (leftTimedOut || rightTimedOut) return false;
+
+        left = (float)l;
+        right = (float)r;
+        return true;
+    }
+
+    // Print the three readings. Without this there is no way to tell a working
+    // sensor from a dead one -- nothing else in the code ever shows a number.
+    void report() {
+        Serial.print(F("  [LIDAR] F=")); Serial.print(frontMM, 0);
+        Serial.print(F(" L="));          Serial.print(leftMM, 0);
+        Serial.print(F(" R="));          Serial.print(rightMM, 0);
+        Serial.print(F("   wall F/L/R: "));
+        Serial.print(hasWallFront() ? F("Y") : F("n"));
+        Serial.print(hasWallLeft()  ? F("Y") : F("n"));
+        Serial.print(hasWallRight() ? F("Y") : F("n"));
+        if (hasWallLeft() && hasWallRight()) {
+            // With the robot centred in a corridor, ROBOT_WIDTH_MM in Pose.hpp
+            // should equal 180 - (L + R). If it does not, every lateral
+            // correction is being rejected.
+            Serial.print(F("  L+R=")); Serial.print(leftMM + rightMM, 0);
+            Serial.print(F(" -> ROBOT_WIDTH_MM should be "));
+            Serial.print(180.0f - leftMM - rightMM, 0);
+        }
+        if (hasError()) Serial.print(F("   *** TIMEOUT ***"));
+        Serial.println();
+    }
+
+    // Print several stationary samples at startup. Sensor presence was already
+    // verified from each model-ID register in begin(); a reading of 255 here
+    // can legitimately mean that nothing is in range.
+    bool selfTest() {
+        Serial.println(F("LiDAR self-test:"));
+        bool ok = true;
+        for (uint8_t i = 0; i < 3; i++) {
+            scan();
+            if (hasError()) ok = false;
+            report();
+            delay(60);
+        }
+        Serial.println(ok ? F("  startup readings complete")
+                          : F("  a sensor timed out - do not drive"));
+        return ok;
+    }
+
+    // Stream readings so you can wave a hand at each sensor and confirm which
+    // channel is which. Set LIDAR_WATCH to 1 in week_12.ino.
+    void watch(unsigned long ms) {
+        Serial.println(F("LiDAR watch - wave a hand at FRONT, then LEFT, then RIGHT"));
+        unsigned long t0 = millis();
+        while (millis() - t0 < ms) { scan(); report(); delay(150); }
+    }
+
     float getFrontMM() const { return frontMM; }
     float getLeftMM() const { return leftMM; }
     float getRightMM() const { return rightMM; }
@@ -136,9 +233,9 @@ private:
     float rightBuffer[BUFFER_SIZE] = {255.0, 255.0, 255.0};
     uint8_t bufferIndex = 0;
 
-    bool frontTimedOut;
-    bool rightTimedOut;
-    bool leftTimedOut;
+    bool frontTimedOut = false;
+    bool rightTimedOut = false;
+    bool leftTimedOut  = false;
     
 };
 

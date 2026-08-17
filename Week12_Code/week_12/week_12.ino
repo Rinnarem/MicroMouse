@@ -24,7 +24,7 @@
  *
  */
 
-#define TASK_NUM 2
+#define TASK_NUM 1
 
 
 // =====================================================================
@@ -58,6 +58,10 @@
 #include "gen_task42_full.h"
 
 #define USE_LIDAR_CORRECTION 1 // 0: odometry only, 1: with snapToWall correction
+
+// Set to 1 to stream LiDAR readings for 10 s at startup, so you can wave a hand
+// at each sensor and confirm which channel is which. Set back to 0 for a run.
+#define LIDAR_WATCH 0
 
 // Motor pins (DRV8835, Phase/Enable mode)
 #define MOT1_PWM  9
@@ -118,12 +122,30 @@ float headingOf(mtrn3100::Maze::Direction dir) {
 
 void initHardware() {
     Wire.begin();
-    lidars.begin();
 
-    byte status = mpu.begin();
+    if (!lidars.begin()) {
+        Serial.println(F("LiDAR startup failed - robot halted."));
+
+        while (1) {
+            delay(1000);
+        }
+    }
+
+    // The IMU sometimes misses the first I2C attempt after a power-up or
+    // upload. Hanging forever on that looks exactly like "the robot does
+    // nothing", with nothing on screen to explain it.
+    byte status = 1;
+    for (uint8_t attempt = 1; attempt <= 5 && status != 0; attempt++) {
+        status = mpu.begin();
+        if (status != 0) {
+            Serial.print(F("IMU not responding, retry "));
+            Serial.println(attempt);
+            delay(200);
+        }
+    }
     if (status != 0) {
-        Serial.print(F("IMU failed (")); Serial.print(status); Serial.println(F(")."));
-        while (1);
+        Serial.println(F("IMU DEAD - check I2C wiring. Halting."));
+        while (1) { delay(500); }
     }
 
     // force ±500 deg/s gyro range (battery-mode bug fix)
@@ -136,6 +158,14 @@ void initHardware() {
     delay(1000);
     mpu.calcOffsets(true, true);
     Serial.println(F("IMU ready."));
+
+    // Confirm the LiDARs answer before anything moves. A sensor whose I2C
+    // address never took reads a flat 255, which is indistinguishable from
+    // "no wall" -- so it fails silently and the robot just drives into things.
+    lidars.selfTest();
+#if LIDAR_WATCH
+    lidars.watch(10000);
+#endif
 
     float x = (START_COL + 0.5f) * CELL_M;
     float y = (START_ROW + 0.5f) * CELL_M;
@@ -168,7 +198,7 @@ void setup() {
         Serial.println(F(")"));
         Serial.print(F("  image used: ")); Serial.println(F(GEN_TASK42_IMAGE));
     #elif TASK_NUM == 3
-        Serial.println(F("TASK 3  - 4.3 IMPLEMENTED, robot will move"));
+        Serial.println(F("TASK 3  - 4.3 NOT IMPLEMENTED, robot will not move"));
     #elif TASK_NUM == 4
         Serial.println(F("TASK 4  - 4.2 full maze"));
         Serial.print(F("  place robot at cell ("));
@@ -181,13 +211,31 @@ void setup() {
 
 void loop() {
 
-    // initial delay for 5s
-    delay(2000);
+    // Wait, but keep the IMU integrating throughout. A bare delay() here left
+    // the gyro un-updated for five seconds, and the first update() of the run
+    // then applied all five seconds of drift at once -- a phantom heading error
+    // that made the robot turn on the spot before it had gone anywhere.
+    motion.idle(2000);
     Serial.println(F("Task starting in 3 seconds"));
-    delay(3000);
+    motion.idle(3000);
 
     #if TASK_NUM == 1
-        mazeNav.executePath(PATH, START_ROW, START_COL, START_DIR);
+        // Re-anchor now, not in setup(): the five-second wait sits between the
+        // two, and any gyro drift over it would otherwise become the run's
+        // starting heading error.
+        pose.reset((START_COL + 0.5f) * CELL_M,
+           (START_ROW + 0.5f) * CELL_M,
+           headingOf(START_DIR));
+
+        // Conservative speed until the maze is contact-free.
+        motion.setSpeedLimit(160.0f);
+
+        mazeNav.executePath(
+            PATH,
+            START_ROW,
+            START_COL,
+            START_DIR
+        );
 
     #elif (TASK_NUM == 2)
         // Standalone continuous-section run (2 marks). The robot is placed by
@@ -209,7 +257,7 @@ void loop() {
         }
 
     #elif (TASK_NUM == 3)
-        mazeNav.exploreAndSolveMaze(START_ROW, START_COL, START_DIR);
+        Serial.println(F("4.3 is not implemented - nothing to run."));
 
     #elif (TASK_NUM == 4)
         // Full maze run through the obstacle course (Task 4.2, all 5 marks).
@@ -225,6 +273,14 @@ void loop() {
 
             // Stage 2 — continuous section. executeWaypoints turns LiDAR
             // snapping off itself and re-enables the collision guard.
+            // Re-anchor on the known entry cell. The planner treats waypoint
+            // zero as that exact centre and does not drive to it, so any pose
+            // offset carried in from the grid stage would shift the whole
+            // continuous trajectory sideways.
+            pose.reset((OBS_ENTRY_COL + 0.5f) * CELL_M,
+                       (OBS_ENTRY_ROW + 0.5f) * CELL_M,
+                       headingOf(OBS_ENTRY_DIR));
+
             if (obstacleNav.executeWaypoints(OBSTACLE_WAYPOINTS,
                                              OBSTACLE_WAYPOINT_COUNT,
                                              headingOf(OBS_EXIT_DIR))) {
