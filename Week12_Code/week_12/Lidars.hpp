@@ -1,4 +1,3 @@
-
 /**
  * Scans the lidars of the micromouse
  * 
@@ -9,6 +8,13 @@
 #include <stdint.h>
 #include <Arduino.h>
 #include <VL6180X.h>
+
+// Verbose per-sensor readout in report(), off by default. Same pattern as
+// MOTION_DEBUG in MotionController.hpp/Pose.hpp -- flip to 1 only while
+// tuning WALL_THRESHOLD or ROBOT_WIDTH_MM, not for a competition run.
+#ifndef LIDAR_DEBUG
+#define LIDAR_DEBUG 0
+#endif
 
 namespace mtrn3100 {
 
@@ -149,7 +155,15 @@ public:
 
     // Print the three readings. Without this there is no way to tell a working
     // sensor from a dead one -- nothing else in the code ever shows a number.
+    //
+    // The full per-sensor breakdown and the ROBOT_WIDTH_MM calibration hint
+    // are tuning aids, not run-time necessities -- gated behind LIDAR_DEBUG
+    // (default 0) since every Serial.print call site plus its F() string
+    // costs flash whether or not anyone is watching Serial. The TIMEOUT
+    // warning stays unconditional: it's the one line that matters if a
+    // sensor dies mid-run.
     void report() {
+#if LIDAR_DEBUG
         Serial.print(F("  [LIDAR] F=")); Serial.print(frontMM, 0);
         Serial.print(F(" L="));          Serial.print(leftMM, 0);
         Serial.print(F(" R="));          Serial.print(rightMM, 0);
@@ -165,8 +179,11 @@ public:
             Serial.print(F(" -> ROBOT_WIDTH_MM should be "));
             Serial.print(180.0f - leftMM - rightMM, 0);
         }
-        if (hasError()) Serial.print(F("   *** TIMEOUT ***"));
+#endif
+        if (hasError()) Serial.println(F("  [LIDAR] *** TIMEOUT ***"));
+#if LIDAR_DEBUG
         Serial.println();
+#endif
     }
 
     // Print several stationary samples at startup. Sensor presence was already

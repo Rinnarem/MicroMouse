@@ -461,18 +461,22 @@ private:
             lidars.scan();
         }
 
-        // Show what the sensors see and what the correction did with it.
-        // snapToWall only acts when a wall is actually in range, so a silent
-        // "no correction" is normal in open stretches -- but you need to be
-        // able to tell that apart from a dead sensor.
+        // Before/after diff (dx/dy/dh) and its Serial output are a tuning
+        // aid for confirming snapToWall() is doing something sane -- gated
+        // behind MOTION_DEBUG since it's not just strings: the subtraction,
+        // fabs/degrees calls, and branch all cost flash whether or not
+        // anyone reads Serial during a run.
+#if MOTION_DEBUG
         lidars.report();
         float bx = pose.getX() * 1000.0f, by = pose.getY() * 1000.0f;
         float bh = pose.getH();
+#endif
         // Argument order is (front, left, right, hasFront, hasLeft, hasRight).
         pose.snapToWall(lidars.getFrontMM(), lidars.getLeftMM(), lidars.getRightMM(),
                         lidars.hasWallFront(), lidars.hasWallLeft(),
                         lidars.hasWallRight());
 
+#if MOTION_DEBUG
         float dx = pose.getX() * 1000.0f - bx;
         float dy = pose.getY() * 1000.0f - by;
         float dh = degrees(pose.getH() - bh);
@@ -484,6 +488,7 @@ private:
         } else {
             Serial.println(F("  [SNAP] no correction applied"));
         }
+#endif
 
         // snapToWall() ends with odometry.reset(), which zeroes the encoder
         // reference but NOT the hardware counters. Re-sync them so the next
