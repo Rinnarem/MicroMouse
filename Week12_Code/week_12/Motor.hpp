@@ -1,4 +1,5 @@
 #pragma once
+// Claude was used to help write and debug this code
 
 #include <Arduino.h>
 #include "math.h"

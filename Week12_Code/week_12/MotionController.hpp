@@ -3,6 +3,8 @@
  *
  * Moves micromouse forward one cell, turns left, turns right 90 degrees
  * Incorporates the odometry, PID, Lidars
+ * 
+ * Claude was used to help write and debug this code
  */
 
 #pragma once
@@ -602,6 +604,22 @@ public:
         motorR.setPWM(0);
     }
 
+    void scanLidars() {
+        lidars.scan();
+    }
+
+    bool hasWallFront() {
+        return lidars.hasWallFront();
+    }
+
+    bool hasWallLeft() {
+        return lidars.hasWallLeft();
+    }
+    bool hasWallRight() {
+        return lidars.hasWallRight();
+    }
+
+
 private:
     bool turn(float deltaH) {
         encoder.reset();
@@ -739,6 +757,7 @@ private:
             pose.getY() * 1000.0f;
 
         float beforeH =
+#endif
             pose.getH();
 
         pose.snapToWall(
@@ -750,6 +769,7 @@ private:
             lidars.hasWallRight()
         );
 
+#if MOTION_DEBUG
         float deltaX =
             pose.getX() * 1000.0f -
             beforeX;
@@ -784,6 +804,7 @@ private:
                 F("  [SNAP] no correction applied")
             );
         }
+#endif
 
         encoder.reset();
         pose.resetEncoderReference();

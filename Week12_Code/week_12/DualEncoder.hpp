@@ -12,6 +12,8 @@
  *   Both encoders count UP when the robot drives FORWARD.
  *   If the right encoder counts DOWN when going forward, set RIGHT_INVERTED = true.
  *   Verify with Calibration.ino: drive forward, both counts should increase.
+ * 
+ * Claude was used to help write and debug this code
  */
 
 namespace mtrn3100 {

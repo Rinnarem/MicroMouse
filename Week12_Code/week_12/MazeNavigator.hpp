@@ -1,5 +1,7 @@
 /**
  * Uses Maze and MotionController class to navigate the maze
+ * 
+ * Claude was used to help write and debug this code
  */
 
 #pragma once
@@ -13,7 +15,10 @@ class MazeNavigator {
 
 public:
 
-    MazeNavigator(Maze& maze, MotionController& motion) : maze(maze), motion(motion) {}
+    // display is optional -- pass nullptr (or use the other constructor) for
+    // tasks that don't need the OLED (4.1, 4.2, 4.4 all reuse this class via
+    // executePath, which never touches display).
+    MazeNavigator(Maze& maze, MotionController& motion): maze(maze), motion(motion) {}
 
     // 4.1 - given a string of commands, executes the path and returns true if successful
     bool executePath (const char* path, uint8_t startRow, uint8_t startCol, mtrn3100::Maze::Direction startDir) {
@@ -41,6 +46,13 @@ public:
     // 4.3 - autonomously explores the maze, maps walls, and solves the shortest path
     bool exploreAndSolveMaze(uint8_t startRow, uint8_t startCol, Maze::Direction startDir) {
 
+        // These were never set before the loop below used them -- executePath
+        // sets them at the top of every run, exploreAndSolveMaze needs the
+        // same thing since it drives currRow/currCol/currDir directly too.
+        currRow = startRow;
+        currCol = startCol;
+        currDir = startDir;
+
         // Explore the maze
         bool fullyExplored = false;
         maze.resetCompletionStatus();
@@ -52,7 +64,9 @@ public:
             bool changed = updateSurroundingWalls();
 
             // update maze
-            if (changed) {maze.floodFill();}
+            if (changed) {
+                maze.floodFill();
+            }
 
             // determine next step
             turnToNextCell();
@@ -69,7 +83,10 @@ public:
         // navigate back to start position
         uint8_t goalRow = maze.getGoalRow();
         uint8_t goalCol = maze.getGoalCol();
-        maze.setTarget(startRow, startCol);
+        // Maze has no setTarget() -- setGoal() is what recomputes floodFill()
+        // for a new target cell, which is exactly what's needed to route back
+        // to the start. The real goal is restored below once we're there.
+        maze.setGoal(startRow, startCol);
 
         // go back to start position
         const uint8_t MAX_PATH_LEN = 100;
@@ -85,9 +102,9 @@ public:
 
         // set target back to goal and get path
         maze.setGoal(goalRow, goalCol);
-        
+
         // execute shortest path to goal
-        uint8_t pathLen = maze.getPathCommands(currRow, currCol, currDir, path, MAX_PATH_LEN);
+        pathLen = maze.getPathCommands(currRow, currCol, currDir, path, MAX_PATH_LEN);
         executePath(path, currRow, currCol, currDir);
 
         return true;
