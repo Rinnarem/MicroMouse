@@ -11,7 +11,7 @@
 
 #define GEN_TASK41_IMAGE "pic007.jpg"
 
-#define PATH      "ffrfrflffffrffflflffrfflff"
+#define PATH      "flflfrflffrfrrflffrflfrfrf"
 #define START_ROW 0
 #define START_COL 4
 #define START_DIR mtrn3100::Maze::EAST
