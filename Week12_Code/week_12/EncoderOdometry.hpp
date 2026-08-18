@@ -13,6 +13,8 @@
  *
  * NOTE: odometry.update() must be called each control loop iteration.
  *       It is not called automatically.
+ * 
+ *  Claude was used to help write and debug this code
  */
 
 namespace mtrn3100 {

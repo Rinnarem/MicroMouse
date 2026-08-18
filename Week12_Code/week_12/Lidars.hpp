@@ -1,6 +1,6 @@
 /**
  * Scans the lidars of the micromouse
- * 
+ * Claude was used to help write and debug this code
  */
 
 #pragma once

@@ -3,6 +3,8 @@
  * 
  * Moves micromouse forward one cell, turns left, turns right 90 degrees
  * Incorporates the odometry, PID, Lidars
+ * 
+ * Claude was used to help write and debug this code
  */
 
 #pragma once

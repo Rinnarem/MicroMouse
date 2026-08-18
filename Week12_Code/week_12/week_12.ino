@@ -19,8 +19,7 @@
  *
  *  Then always:  python3 preflight.py     before uploading.
  *
- *  NOTE ON TASK_NUM 3: MazeNavigator::exploreAndSolveMaze() is an empty stub.
- *  The robot will sit still. Do not use it expecting a result.
+ *  Claude was used to help write and debug this code
  *
  */
 

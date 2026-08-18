@@ -28,6 +28,8 @@
  *     roughly 1.5-2 KB of flash by itself. u8g2's Arduino-style print()
  *     (it extends Print, same as Serial) formats integers directly with
  *     none of that baggage.
+ * 
+ * Claude was used to help write and debug this code
  */
 
 #pragma once

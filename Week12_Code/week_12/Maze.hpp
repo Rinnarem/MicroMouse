@@ -1,4 +1,9 @@
 #pragma once
+/**
+ * Maps the maze and finds shortest path
+ * 
+ * Claude was used to help write and debug this code
+ */
 
 #include <stdint.h>
 #include <stdio.h>

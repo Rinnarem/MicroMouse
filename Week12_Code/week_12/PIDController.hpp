@@ -14,6 +14,8 @@ namespace mtrn3100 {
  *
  * NOTE: Not used in Week 8 assessment (Task 2 uses an inline PID).
  *       Kept here as a reusable utility for future tasks.
+ * 
+ * Claude was used to help write and debug this code
  */
 class PIDController {
 public:

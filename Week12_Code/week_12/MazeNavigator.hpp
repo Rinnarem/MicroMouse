@@ -1,5 +1,7 @@
 /**
  * Uses Maze and MotionController class to navigate the maze
+ * 
+ * Claude was used to help write and debug this code
  */
 
 #pragma once
