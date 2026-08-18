@@ -42,6 +42,30 @@ class Maze {
             setWall(i, 0, WEST, true);
             setWall(i, SIZE - 1, EAST, true);
         }
+
+        // set boundaries for corner cells - top left
+        setWall(0, 1, EAST, true);
+        setWall(0, 1, SOUTH, true);
+        setWall(1, 0, SOUTH, true);
+        setWall(1, 0, EAST, true);
+
+        // top right
+        setWall(0, SIZE - 2, WEST, true);
+        setWall(0, SIZE - 2, SOUTH, true);
+        setWall(1, SIZE - 1,  SOUTH, true);
+        setWall(1, SIZE - 1, WEST, true);
+
+        // bottom left
+        setWall(SIZE - 2, 0, EAST, true);
+        setWall(SIZE - 2, 0, NORTH, true);
+        setWall(SIZE - 1, 1, NORTH, true);
+        setWall(SIZE -1 , 1, EAST, true);
+
+        // bottom right
+        setWall(SIZE -2, SIZE -1 , WEST, true);
+        setWall(SIZE -2, SIZE - 1, NORTH, true);
+        setWall(SIZE -1, SIZE -2, WEST, true);
+        setWall(SIZE -1, SIZE -2, NORTH, true);
     }
 
     // Given a cell and direction, sets a wall between the two neighbouring cells (for 4.3)
