@@ -198,7 +198,7 @@ void setup() {
         Serial.println(F(")"));
         Serial.print(F("  image used: ")); Serial.println(F(GEN_TASK42_IMAGE));
     #elif TASK_NUM == 3
-        Serial.println(F("TASK 3  - 4.3 NOT IMPLEMENTED, robot will not move"));
+        Serial.println(F("TASK 3  - 4.3 IMPLEMENTED, robot will move"));
     #elif TASK_NUM == 4
         Serial.println(F("TASK 4  - 4.2 full maze"));
         Serial.print(F("  place robot at cell ("));
@@ -257,7 +257,7 @@ void loop() {
         }
 
     #elif (TASK_NUM == 3)
-        Serial.println(F("4.3 is not implemented - nothing to run."));
+        mazeNav.exploreAndSolveMaze(START_ROW, START_COL, START_DIR);
 
     #elif (TASK_NUM == 4)
         // Full maze run through the obstacle course (Task 4.2, all 5 marks).
